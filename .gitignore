@@ -1,0 +1,60 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE/Editor
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Node/JS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.bun/
+.bun-cache/
+.eslintcache
+
+# React/Vite
+/dist/
+/build/
+.vite/
+.cache/
+coverage/
+
+# Env files
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# Docker (local overrides/artifacts)
+docker-compose.override.yml
+.docker/
+tmp/
+
+# .NET/Visual Studio
+.vs/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+TestResults/
+*.nupkg
+*.snupkg
+*.psess
+*.vsp*
+*.pidb
+*.svclog
+_ReSharper*/
+*.DotSettings.user
+
+# Local database data (if used)
+database/data/
+postgres-data/
+pgdata/
