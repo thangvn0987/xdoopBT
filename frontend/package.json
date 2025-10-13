@@ -1,0 +1,7 @@
+{
+  "name": "aesp-frontend",
+  "private": true,
+  "scripts": {
+    "dev": "node -e \"console.log('frontend placeholder'); setInterval(()=>{}, 1<<30)\""
+  }
+}

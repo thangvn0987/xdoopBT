@@ -65,6 +65,7 @@ The platform is designed with a **microservice architecture** for scalability an
 | Scalability | Microservice architecture using Docker Compose, scalable to Kubernetes. |
 | Security | JWT authentication, bcrypt password hashing, HTTPS enforced. |
 | Maintainability | Clean Architecture for .NET Core services and unified API structure. |
+| Maintainability | Modular, layered architecture for Node.js (TypeScript) services with a unified API structure. |
 | Integration | Unified OpenAI API key for Whisper and GPT-4o-mini models. |
 | Database | PostgreSQL chosen for JSONB support and strong ACID compliance. |
 | Cost | All services use free-tier or open-source tools. |
@@ -79,11 +80,11 @@ The platform is designed with a **microservice architecture** for scalability an
 | Layer | Technology | Reason |
 |--------|-------------|--------|
 | Frontend | React.js + Vite + TailwindCSS + shadcn/ui + Framer Motion + Lottie | Modern, fast, animated UI. |
-| Backend Services | .NET Core 8 Web API (Auth, Learner, Mentor) | Scalable, maintainable microservices. |
+| Backend Services | Node.js (TypeScript) – NestJS/Express microservices (Auth, Learner, Mentor) | Scalable, maintainable microservices. |
 | AI Service | Node.js (OpenAI Whisper + GPT-4o-mini) | Lightweight and asynchronous for AI calls. |
 | Database | PostgreSQL (Neon.tech / Supabase / Render) | JSONB for AI feedback and analytics. |
 | Containerization | Docker + Docker Compose | Simplified multi-service deployment. |
-| Gateway | Nginx / YARP (.NET) | API routing and load balancing. |
+| Gateway | Nginx / Node gateway (Express/Nest/Fastify) | API routing and load balancing. |
 | Storage | Cloudinary | Free-tier audio storage. |
 | Version Control | GitHub | Collaboration and versioning. |
 
@@ -94,7 +95,7 @@ Frontend (React + Vite)
 API Gateway (Nginx / YARP)
      ↓
  ┌────────────────────────────────────────────────────────────────────────┐
- │ Microservices (.NET Core)         │
+ │ Microservices (Node.js)           │
  │  - Auth Service                   │
  │  - Learner Service                │
  │  - Mentor Service                 │
@@ -193,8 +194,8 @@ services:
 | Week | Goal |
 |-------|------|
 | 1 | Setup monorepo, Docker Compose, PostgreSQL connection |
-| 2 | Develop Auth and Gateway services (.NET Core) |
-| 3 | Build Learner and Mentor services (.NET Core) |
+| 2 | Develop Auth and Gateway services (Node.js) |
+| 3 | Build Learner and Mentor services (Node.js) |
 | 4 | Implement AI Service (Node.js Whisper + GPT) |
 | 5 | Integrate Frontend with Gateway and API services |
 | 6 | Testing, CI/CD setup, and final deployment |
@@ -224,6 +225,6 @@ services:
 ---
 
 ### ✅ Summary
-This **AESP PRD v3.0** integrates **PostgreSQL**, **Dockerized .NET Core Microservices**, **unified OpenAI API for Whisper + GPT-4o-mini**, and a **modern animated frontend stack** (React + Tailwind + shadcn/ui).  
+This **AESP PRD v3.0** integrates **PostgreSQL**, **Dockerized Node.js Microservices**, **unified OpenAI API for Whisper + GPT-4o-mini**, and a **modern animated frontend stack** (React + Tailwind + shadcn/ui).  
 The system is **production-ready**, **scalable**, and aligned with **real-world SaaS architecture standards**.
 
