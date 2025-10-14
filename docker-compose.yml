@@ -1,0 +1,125 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: aesp_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - aesp_net
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: aesp_auth
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${AUTH_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+    depends_on:
+      - postgres
+    # No public port; reachable inside network at http://auth-service:3000
+    networks:
+      - aesp_net
+
+  learner-service:
+    build: ./services/learner-service
+    container_name: aesp_learner
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${LEARNER_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      - postgres
+    # No public port; reachable at http://learner-service:3000
+    networks:
+      - aesp_net
+
+  mentor-service:
+    build: ./services/mentor-service
+    container_name: aesp_mentor
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${MENTOR_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      - postgres
+    # No public port; reachable at http://mentor-service:3000
+    networks:
+      - aesp_net
+
+  ai-service:
+    build: ./services/ai-service
+    container_name: aesp_ai
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${AI_PORT}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL_TTS: ${OPENAI_MODEL_TTS}
+      OPENAI_MODEL_WHISPER: ${OPENAI_MODEL_WHISPER}
+      DATABASE_URL: ${DATABASE_URL}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    depends_on:
+      - postgres
+    # No public port; reachable at http://ai-service:3000
+    networks:
+      - aesp_net
+
+  frontend:
+    build: ./frontend
+    container_name: aesp_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      VITE_API_BASE_URL: "http://localhost:${AUTH_PORT}"
+    # No public port; served via gateway
+    depends_on:
+      - auth-service
+      - learner-service
+      - mentor-service
+      - ai-service
+    networks:
+      - aesp_net
+
+  gateway:
+    build: ./gateway
+    container_name: aesp_gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      GATEWAY_PORT: ${GATEWAY_PORT}
+    depends_on:
+      - frontend
+      - auth-service
+      - learner-service
+      - mentor-service
+      - ai-service
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    networks:
+      - aesp_net
+networks:
+  aesp_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
