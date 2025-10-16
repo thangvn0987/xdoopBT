@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 function GoogleIcon(props) {
   return (
@@ -29,6 +30,26 @@ function GoogleIcon(props) {
 }
 
 export default function LoginPage() {
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // If we already have a token, go home
+      try {
+        const token = localStorage.getItem("aesp_token");
+        if (token && !cancelled) return navigate("/", { replace: true });
+      } catch {}
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        if (res.ok && !cancelled) return navigate("/", { replace: true });
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
   const handleGoogleLogin = () => {
     // Start OAuth via gateway -> auth-service
     window.location.href = "/api/auth/google";
