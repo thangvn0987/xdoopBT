@@ -38,10 +38,15 @@ export default function HomePage() {
 
   const handleLogout = async () => {
     try {
-      try { localStorage.removeItem('aesp_token'); } catch {}
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      try {
+        localStorage.removeItem("aesp_token");
+      } catch {}
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
     } catch {}
-    window.location.href = '/login';
+    window.location.href = "/login";
   };
 
   const [open, setOpen] = React.useState(false);
@@ -70,30 +75,55 @@ export default function HomePage() {
               </a>
             </nav>
             <div className="relative">
-              <button onClick={toggleOpen} className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold overflow-hidden border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <button
+                onClick={toggleOpen}
+                className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold overflow-hidden border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              >
                 {user?.avatar ? (
-                  <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  <img
+                    src={user.avatar}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <span>{initials}</span>
                 )}
               </button>
               {open && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-lg z-20" onMouseLeave={close}>
+                <div
+                  className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-lg z-20"
+                  onMouseLeave={close}
+                >
                   <div className="p-3 flex items-center gap-3 border-b">
                     <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold overflow-hidden border border-indigo-200">
                       {user?.avatar ? (
-                        <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
+                        <img
+                          src={user.avatar}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
                         <span>{initials}</span>
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">{user?.name || 'User'}</p>
-                      <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
+                      <p className="text-sm font-semibold truncate">
+                        {user?.name || "User"}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {user?.email || ""}
+                      </p>
                     </div>
                   </div>
-                  <button className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">Settings (coming soon)</button>
-                  <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Logout</button>
+                  <button className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">
+                    Settings (coming soon)
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    Logout
+                  </button>
                 </div>
               )}
             </div>
