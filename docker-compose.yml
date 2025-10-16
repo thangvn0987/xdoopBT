@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
@@ -23,7 +21,6 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV}
-      PORT: ${AUTH_PORT}
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
@@ -43,7 +40,6 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV}
-      PORT: ${LEARNER_PORT}
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
@@ -58,7 +54,6 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV}
-      PORT: ${MENTOR_PORT}
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
@@ -73,7 +68,6 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV}
-      PORT: ${AI_PORT}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL_TTS: ${OPENAI_MODEL_TTS}
       OPENAI_MODEL_WHISPER: ${OPENAI_MODEL_WHISPER}
