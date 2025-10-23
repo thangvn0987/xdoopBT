@@ -25,8 +25,14 @@ body {
 }
 
 @keyframes wave {
-  from { transform: scaleY(0.5); opacity: 0.9; }
-  to { transform: scaleY(1.2); opacity: 1; }
+  from {
+    transform: scaleY(0.5);
+    opacity: 0.9;
+  }
+  to {
+    transform: scaleY(1.2);
+    opacity: 1;
+  }
 }
 
 .spinner {
@@ -39,5 +45,12 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Smooth bar height changes for live waveform */
+.live-bar {
+  transition: height 120ms linear;
 }
