@@ -5,6 +5,7 @@ const cookieParser = require("cookie-parser");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const jwt = require("jsonwebtoken");
+const { Pool } = require("pg");
 
 const app = express();
 app.use(
@@ -19,6 +20,30 @@ app.use(passport.initialize());
 
 const SERVICE_NAME = process.env.SERVICE_NAME || "auth-service";
 const PORT = Number(process.env.PORT) || 3000;
+const DATABASE_URL = process.env.DATABASE_URL;
+
+// DB
+const pool = new Pool({ connectionString: DATABASE_URL });
+
+async function ensureSchema() {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      email TEXT,
+      name TEXT,
+      avatar TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_login_at TIMESTAMPTZ
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider_providerid
+      ON users (provider, provider_id);
+    CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
+  `;
+  await pool.query(sql);
+}
 
 app.get("/", (req, res) => {
   res.json({ service: SERVICE_NAME, message: "Welcome to AESP Auth Service" });
@@ -46,20 +71,31 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        // TODO: upsert user into DB here, using profile.id / emails[0]
-        const user = {
-          id: profile.id,
-          name: profile.displayName,
-          email:
-            profile.emails && profile.emails[0]
-              ? profile.emails[0].value
-              : undefined,
-          avatar:
-            profile.photos && profile.photos[0]
-              ? profile.photos[0].value
-              : undefined,
-          provider: "google",
-        };
+        const provider = "google";
+        const providerId = profile.id;
+        const name = profile.displayName;
+        const email =
+          profile.emails && profile.emails[0] ? profile.emails[0].value : null;
+        const avatar =
+          profile.photos && profile.photos[0] ? profile.photos[0].value : null;
+
+        const id = `${provider}:${providerId}`;
+
+        // Upsert user
+        await pool.query(
+          `INSERT INTO users (id, provider, provider_id, email, name, avatar, last_login_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW())
+           ON CONFLICT (id)
+           DO UPDATE SET
+             email = EXCLUDED.email,
+             name = EXCLUDED.name,
+             avatar = EXCLUDED.avatar,
+             updated_at = NOW(),
+             last_login_at = NOW()`,
+          [id, provider, providerId, email, name, avatar]
+        );
+
+        const user = { id, name, email, avatar, provider };
         return done(null, user);
       } catch (err) {
         return done(err);
@@ -155,6 +191,13 @@ app.get("/logout", (req, res) => {
   res.redirect(redirectUrl + "/login");
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`${SERVICE_NAME} listening on port ${PORT}`);
-});
+ensureSchema()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`${SERVICE_NAME} listening on port ${PORT}`);
+    });
+  })
+  .catch((e) => {
+    console.error("Failed to ensure schema:", e);
+    process.exit(1);
+  });
