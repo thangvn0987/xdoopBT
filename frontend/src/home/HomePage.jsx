@@ -2,6 +2,11 @@ import React from "react";
 
 export default function HomePage() {
   const [user, setUser] = React.useState(null);
+  const [pron, setPron] = React.useState({
+    average: null,
+    count: 0,
+    loading: true,
+  });
 
   React.useEffect(() => {
     let cancelled = false;
@@ -21,6 +26,44 @@ export default function HomePage() {
           if (!cancelled) setUser(data);
         }
       } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load Pronunciation average
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        let headers = { Accept: "application/json" };
+        try {
+          const t = localStorage.getItem("aesp_token");
+          if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
+        } catch {}
+        const res = await fetch(
+          "/api/learners/metrics/pronunciation/avg?count=5",
+          {
+            credentials: "include",
+            headers,
+          }
+        );
+        if (!cancelled) {
+          if (res.ok) {
+            const data = await res.json();
+            setPron({
+              average: data.average,
+              count: data.count,
+              loading: false,
+            });
+          } else {
+            setPron((p) => ({ ...p, loading: false }));
+          }
+        }
+      } catch {
+        if (!cancelled) setPron((p) => ({ ...p, loading: false }));
+      }
     })();
     return () => {
       cancelled = true;
@@ -148,7 +191,7 @@ export default function HomePage() {
                 <span>Start AI Conversation</span>
               </a>
               <a
-                href="#level"
+                href="/level-test"
                 className="inline-flex items-center gap-2 bg-indigo-500 text-white font-medium px-4 py-2 rounded hover:bg-indigo-400"
               >
                 <span>Take Level Test</span>
@@ -164,7 +207,7 @@ export default function HomePage() {
               title: "AI Level Test",
               desc: "10-min initial assessment",
               cta: "Start",
-              anchor: "#level",
+              anchor: "/level-test",
             },
             {
               title: "AI Conversation",
@@ -207,8 +250,61 @@ export default function HomePage() {
             <h3 className="font-semibold mb-1">Pronunciation Score</h3>
             <p className="text-sm text-gray-500">Avg. last 5 sessions</p>
             <div className="mt-4 h-24 rounded bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center text-emerald-700">
-              <span className="text-2xl font-bold">86</span>
+              <span className="text-2xl font-bold">
+                {pron.loading
+                  ? "…"
+                  : pron.average != null
+                  ? Math.round(pron.average)
+                  : "-"}
+              </span>
             </div>
+            <div className="mt-2 text-xs text-gray-500">
+              {pron.count} sessions
+            </div>
+            <button
+              onClick={async () => {
+                // Demo: log a random sample score 70-95
+                try {
+                  let headers = { "Content-Type": "application/json" };
+                  try {
+                    const t = localStorage.getItem("aesp_token");
+                    if (t)
+                      headers = { ...headers, Authorization: `Bearer ${t}` };
+                  } catch {}
+                  const sample = Math.round(70 + Math.random() * 25);
+                  await fetch("/api/learners/metrics/pronunciation", {
+                    method: "POST",
+                    credentials: "include",
+                    headers,
+                    body: JSON.stringify({ score: sample }),
+                  });
+                  // Refresh
+                  const res = await fetch(
+                    "/api/learners/metrics/pronunciation/avg?count=5",
+                    {
+                      credentials: "include",
+                      headers: {
+                        Accept: "application/json",
+                        ...(headers.Authorization
+                          ? { Authorization: headers.Authorization }
+                          : {}),
+                      },
+                    }
+                  );
+                  if (res.ok) {
+                    const data = await res.json();
+                    setPron({
+                      average: data.average,
+                      count: data.count,
+                      loading: false,
+                    });
+                  }
+                } catch {}
+              }}
+              className="mt-3 px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
+            >
+              Log sample score
+            </button>
           </div>
           <div className="rounded-xl border bg-white p-4">
             <h3 className="font-semibold mb-1">Vocabulary Growth</h3>
