@@ -17,3 +17,27 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Level test UI helpers */
+.wave-bar {
+  transform-origin: bottom center;
+  animation: wave 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes wave {
+  from { transform: scaleY(0.5); opacity: 0.9; }
+  to { transform: scaleY(1.2); opacity: 1; }
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  border: 3px solid #e5e7eb; /* gray-200 */
+  border-top-color: #4f46e5; /* indigo-600 */
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
