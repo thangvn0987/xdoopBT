@@ -7,6 +7,13 @@ export default defineConfig({
     port: 3000,
     // Allow access when running behind Docker/Gateway where host header may be 'frontend'
     allowedHosts: ["frontend", "gateway", "localhost", "127.0.0.1"],
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_TARGET || "http://localhost:8080",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   plugins: [react()],
 });

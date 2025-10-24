@@ -5,6 +5,7 @@ import HomePage from "./home/HomePage";
 import RequireAuth from "./auth/RequireAuth";
 import AuthCallback from "./auth/AuthCallback";
 import LevelTest from "./level/LevelTest";
+import ProfilePage from "./profile/ProfilePage";
 
 export default function App() {
   return (
@@ -16,6 +17,14 @@ export default function App() {
         element={
           <RequireAuth>
             <LevelTest />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <ProfilePage />
           </RequireAuth>
         }
       />

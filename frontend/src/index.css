@@ -54,3 +54,39 @@ body {
 .live-bar {
   transition: height 120ms linear;
 }
+
+/* Force light native controls within Level Test to improve contrast */
+.level-test-container {
+  color-scheme: light;
+}
+
+/* Simple utility animations for page sections and toasts */
+.fade-in-up {
+  animation: fadeInUp 420ms ease-out both;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in-right {
+  animation: slideInRight 380ms ease-out both;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}

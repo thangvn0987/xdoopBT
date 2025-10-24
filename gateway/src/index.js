@@ -4,8 +4,17 @@ const cors = require("cors");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+// Important: Do NOT parse request bodies before proxying.
+// Body parsers consume the stream, causing proxied PUT/POST with JSON bodies
+// to arrive empty at target services and hang (leading to client timeouts).
+// Each downstream service handles its own body parsing.
+// app.use(express.json());
 
 const GATEWAY_PORT = Number(process.env.GATEWAY_PORT) || 8080;
 const services = {

@@ -5,6 +5,19 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const OpenAI = require("openai");
+const tmp = require("tmp");
+const ffmpegPath = require("ffmpeg-static");
+const ffprobePath = require("ffprobe-static").path;
+const ffmpeg = require("fluent-ffmpeg");
+const {
+  convertToWavMono16k,
+  getAudioInfo,
+  detectSilenceSegments,
+} = require("./pipeline/ffmpeg");
+const { buildSpeechSegments } = require("./pipeline/vad");
+const { transcribeWithOpenAI, approximateWordTimestamps } = require("./pipeline/asr");
+const { phonemeizeAndAlign } = require("./pipeline/align");
+const { scoreWithLLM } = require("./pipeline/llm");
 
 const app = express();
 app.use(cors());
@@ -20,6 +33,10 @@ const upload = multer({ dest: path.join(__dirname, "../tmp") });
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
+// Configure ffmpeg/fluent-ffmpeg binary paths (works in Docker and local)
+if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
+if (ffprobePath) ffmpeg.setFfprobePath(ffprobePath);
+
 app.get("/", (req, res) => {
   res.json({ service: SERVICE_NAME, message: "Welcome to AESP AI Service" });
 });
@@ -31,6 +48,72 @@ app.get("/health", (req, res) => {
     time: new Date().toISOString(),
     openai: !!OPENAI_API_KEY,
   });
+});
+
+// New: Pronunciation scoring endpoint
+// POST /pronunciation/score
+// form-data: audio (file), language, sample_rate_target, reference_text
+app.post("/pronunciation/score", upload.single("audio"), async (req, res) => {
+  const cleanup = () => {
+    if (req.file?.path) fs.unlink(req.file.path, () => {});
+  };
+  try {
+    if (!OPENAI_API_KEY) return res.status(503).json({ error: "OPENAI_API_KEY not configured" });
+    if (!req.file) return res.status(400).json({ error: "Missing audio" });
+    const language = (req.body?.language || "en-US").toString();
+    const referenceText = (req.body?.reference_text || "").toString().trim();
+    const mode = referenceText ? "read-aloud" : "free";
+
+    // 1) Ingest & QC
+    const wavFile = await convertToWavMono16k(req.file.path);
+    const info = await getAudioInfo(wavFile);
+    if (!info?.duration || info.duration < 5) {
+      cleanup();
+      fs.unlink(wavFile, () => {});
+      return res.status(400).json({ error: "Audio too short (<5s)" });
+    }
+
+    // 2) VAD via silencedetect
+    const silences = await detectSilenceSegments(wavFile);
+    const segments = buildSpeechSegments(info.duration, silences);
+
+    // 3) ASR (OpenAI whisper) -> text
+    const tr = await transcribeWithOpenAI(openai, wavFile, language);
+    const transcriptText = tr.text || "";
+    const words = approximateWordTimestamps(transcriptText, segments, info.duration);
+
+    // 4) Alignment & phonemeization
+    const alignment = phonemeizeAndAlign({
+      mode,
+      language,
+      referenceText,
+      transcriptText,
+      words,
+    });
+
+    // 5) Scoring via LLM only (no local fallback for a lighter project)
+    const scoring = await scoreWithLLM(openai, {
+      mode,
+      language,
+      qc: { duration: info.duration, format: info.format, sample_rate: info.sample_rate },
+      referenceText,
+      transcriptText,
+      words,
+      segments,
+      alignment,
+    });
+
+    fs.unlink(wavFile, () => {});
+    cleanup();
+    return res.json({ ok: true, mode, language, qc: scoring.qc, transcript: transcriptText, words, alignment, scores: scoring.scores, feedback: scoring.feedback });
+  } catch (e) {
+    console.error("/pronunciation/score error", e);
+    cleanup();
+    const msg = e?.message || String(e);
+    // If AI not available or JSON parse fails, return 503 to indicate service dependency
+    const code = /openai|api|model|key|quota|rate|json/i.test(msg) ? 503 : 500;
+    return res.status(code).json({ error: msg });
+  }
 });
 
 // Level test: upload audio, transcribe, analyze, return score and feedback

@@ -29,7 +29,7 @@ export default function LevelTest() {
       General: [
         "Introduce yourself and your goals.",
         "Describe your daily routine.",
-        "Toalk about a memorable experience.",
+        "Talk about a memorable experience.",
         "Share your learning plan for English.",
       ],
       Travel: [
@@ -194,7 +194,7 @@ export default function LevelTest() {
   }, [seconds]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-gray-900">
+    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-gray-900 level-test-container">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -215,20 +215,22 @@ export default function LevelTest() {
           <div className="rounded-2xl border bg-white p-5 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
               <div className="flex-1">
-                <label className="block text-sm font-medium">
+                <label className="block text-sm font-medium text-slate-800">
                   Suggested topic
                 </label>
                 <input
-                  className="mt-1 w-full border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  className="mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white text-slate-900 placeholder-slate-500 border border-slate-300 shadow-inner"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="Describe your last trip to the countryside."
                 />
               </div>
               <div className="min-w-[200px]">
-                <label className="block text-sm font-medium">Category</label>
+                <label className="block text-sm font-medium text-slate-800">
+                  Category
+                </label>
                 <select
-                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                  className="mt-1 w-full rounded-xl px-3 py-2 bg-white text-slate-900 border border-slate-300 shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-200"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                 >
