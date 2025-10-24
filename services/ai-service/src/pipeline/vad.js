@@ -19,7 +19,8 @@ function buildSpeechSegments(totalDuration, silenceEvents, minSeg = 0.8) {
     if (r.start > cursor) speech.push({ start: cursor, end: r.start });
     cursor = r.end;
   }
-  if (cursor < totalDuration) speech.push({ start: cursor, end: totalDuration });
+  if (cursor < totalDuration)
+    speech.push({ start: cursor, end: totalDuration });
   // Enforce minimum seg length
   const normalized = speech
     .map((s) => ({ start: Math.max(0, s.start), end: Math.max(0, s.end) }))

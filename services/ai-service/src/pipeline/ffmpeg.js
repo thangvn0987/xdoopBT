@@ -39,12 +39,18 @@ async function convertToWavMono16k(inputFile) {
 }
 
 // Use ffmpeg silencedetect to list silence periods, then we can infer speech segments
-async function detectSilenceSegments(file, silenceThresholdDb = -35, minSilence = 0.2) {
+async function detectSilenceSegments(
+  file,
+  silenceThresholdDb = -35,
+  minSilence = 0.2
+) {
   return new Promise((resolve) => {
     const silences = [];
     let stderr = "";
     ffmpeg(file)
-      .audioFilters(`silencedetect=noise=${silenceThresholdDb}dB:duration=${minSilence}`)
+      .audioFilters(
+        `silencedetect=noise=${silenceThresholdDb}dB:duration=${minSilence}`
+      )
       .format("null")
       .on("stderr", (line) => {
         stderr += line + "\n";
@@ -55,7 +61,11 @@ async function detectSilenceSegments(file, silenceThresholdDb = -35, minSilence 
           silences.push({ type: "start", t: parseFloat(startMatch[1]) });
         } else if (endMatch) {
           const durMatch = line.match(/silence_duration: ([0-9.]+)/);
-          silences.push({ type: "end", t: parseFloat(endMatch[1]), d: durMatch ? parseFloat(durMatch[1]) : undefined });
+          silences.push({
+            type: "end",
+            t: parseFloat(endMatch[1]),
+            d: durMatch ? parseFloat(durMatch[1]) : undefined,
+          });
         }
       })
       .on("end", () => resolve(silences))

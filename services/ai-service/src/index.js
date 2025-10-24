@@ -15,7 +15,10 @@ const {
   detectSilenceSegments,
 } = require("./pipeline/ffmpeg");
 const { buildSpeechSegments } = require("./pipeline/vad");
-const { transcribeWithOpenAI, approximateWordTimestamps } = require("./pipeline/asr");
+const {
+  transcribeWithOpenAI,
+  approximateWordTimestamps,
+} = require("./pipeline/asr");
 const { phonemeizeAndAlign } = require("./pipeline/align");
 const { scoreWithLLM } = require("./pipeline/llm");
 
@@ -58,7 +61,8 @@ app.post("/pronunciation/score", upload.single("audio"), async (req, res) => {
     if (req.file?.path) fs.unlink(req.file.path, () => {});
   };
   try {
-    if (!OPENAI_API_KEY) return res.status(503).json({ error: "OPENAI_API_KEY not configured" });
+    if (!OPENAI_API_KEY)
+      return res.status(503).json({ error: "OPENAI_API_KEY not configured" });
     if (!req.file) return res.status(400).json({ error: "Missing audio" });
     const language = (req.body?.language || "en-US").toString();
     const referenceText = (req.body?.reference_text || "").toString().trim();
@@ -80,7 +84,11 @@ app.post("/pronunciation/score", upload.single("audio"), async (req, res) => {
     // 3) ASR (OpenAI whisper) -> text
     const tr = await transcribeWithOpenAI(openai, wavFile, language);
     const transcriptText = tr.text || "";
-    const words = approximateWordTimestamps(transcriptText, segments, info.duration);
+    const words = approximateWordTimestamps(
+      transcriptText,
+      segments,
+      info.duration
+    );
 
     // 4) Alignment & phonemeization
     const alignment = phonemeizeAndAlign({
@@ -95,7 +103,11 @@ app.post("/pronunciation/score", upload.single("audio"), async (req, res) => {
     const scoring = await scoreWithLLM(openai, {
       mode,
       language,
-      qc: { duration: info.duration, format: info.format, sample_rate: info.sample_rate },
+      qc: {
+        duration: info.duration,
+        format: info.format,
+        sample_rate: info.sample_rate,
+      },
       referenceText,
       transcriptText,
       words,
@@ -105,7 +117,17 @@ app.post("/pronunciation/score", upload.single("audio"), async (req, res) => {
 
     fs.unlink(wavFile, () => {});
     cleanup();
-    return res.json({ ok: true, mode, language, qc: scoring.qc, transcript: transcriptText, words, alignment, scores: scoring.scores, feedback: scoring.feedback });
+    return res.json({
+      ok: true,
+      mode,
+      language,
+      qc: scoring.qc,
+      transcript: transcriptText,
+      words,
+      alignment,
+      scores: scoring.scores,
+      feedback: scoring.feedback,
+    });
   } catch (e) {
     console.error("/pronunciation/score error", e);
     cleanup();

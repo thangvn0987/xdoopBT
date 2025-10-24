@@ -13,15 +13,16 @@ function pseudoPhonemes(word) {
     .replace(/ph/g, "F")
     .replace(/ng/g, "NG")
     .split("")
-    .map((c) =>
-      ({
-        a: "AEIOU",
-        e: "AEIOU",
-        i: "AEIOU",
-        o: "AEIOU",
-        u: "AEIOU",
-        y: "AEIOU",
-      }[c] || c.toUpperCase())
+    .map(
+      (c) =>
+        ({
+          a: "AEIOU",
+          e: "AEIOU",
+          i: "AEIOU",
+          o: "AEIOU",
+          u: "AEIOU",
+          y: "AEIOU",
+        }[c] || c.toUpperCase())
     );
 }
 
@@ -36,7 +37,11 @@ function wordLevelAlign(refWords, hypWords) {
   for (let i = 1; i <= ref.length; i++) {
     for (let j = 1; j <= hyp.length; j++) {
       const cost = ref[i - 1] === hyp[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
     }
   }
   // backtrack to get operations
@@ -59,7 +64,7 @@ function wordLevelAlign(refWords, hypWords) {
   }
   ops.reverse();
   const stats = { S: 0, D: 0, I: 0, M: 0 };
-  ops.forEach((o) => (stats[o.op]++));
+  ops.forEach((o) => stats[o.op]++);
   return { ops, stats };
 }
 
@@ -79,7 +84,13 @@ function gopProxy(refWords, hypWords) {
   return { per, normGOPerr: (1 - goodness) * 100 };
 }
 
-function phonemeizeAndAlign({ mode, language, referenceText, transcriptText, words }) {
+function phonemeizeAndAlign({
+  mode,
+  language,
+  referenceText,
+  transcriptText,
+  words,
+}) {
   const refWords = (referenceText || transcriptText || "")
     .split(/\s+/)
     .map((w) => w.toLowerCase().replace(/[^a-z']/g, ""))

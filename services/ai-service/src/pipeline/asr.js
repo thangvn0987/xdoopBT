@@ -17,7 +17,10 @@ function approximateWordTimestamps(text, segments, totalDur) {
     .map((w) => w.trim())
     .filter(Boolean);
   if (!words.length) return [];
-  const speechDur = segments.reduce((s, x) => s + (x.dur || x.end - x.start), 0) || totalDur || 1;
+  const speechDur =
+    segments.reduce((s, x) => s + (x.dur || x.end - x.start), 0) ||
+    totalDur ||
+    1;
   const avgWordDur = speechDur / words.length;
   const result = [];
   let t = segments.length ? segments[0].start : 0;

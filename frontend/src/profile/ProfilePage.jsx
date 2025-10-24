@@ -10,7 +10,10 @@ export default function ProfilePage() {
   const [error, setError] = React.useState("");
   // Keep a snapshot of what is saved on the server so we can
   // show a nice preview and detect unsaved changes.
-  const [lastSaved, setLastSaved] = React.useState({ goals: "", interests: [] });
+  const [lastSaved, setLastSaved] = React.useState({
+    goals: "",
+    interests: [],
+  });
   const [savedAt, setSavedAt] = React.useState(null);
 
   const hasChanges = React.useMemo(() => {
@@ -92,7 +95,10 @@ export default function ProfilePage() {
       });
       if (!res.ok) throw new Error("Save failed");
       setMessage("Profile saved");
-      setLastSaved({ goals: (goals ?? "").trim(), interests: interests.slice(0) });
+      setLastSaved({
+        goals: (goals ?? "").trim(),
+        interests: interests.slice(0),
+      });
       setSavedAt(new Date());
     } catch (e) {
       if (e.name === "AbortError") {
@@ -137,21 +143,21 @@ export default function ProfilePage() {
               <div className="mt-5">
                 <label className="block text-sm font-medium">Interests</label>
                 <div className="mt-1 flex flex-wrap gap-2">
-                    {interests.map((it, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-800 text-xs border border-indigo-100"
+                  {interests.map((it, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-800 text-xs border border-indigo-100"
+                    >
+                      {it}
+                      <button
+                        onClick={() => removeInterest(i)}
+                        className="ml-1 text-indigo-600 hover:text-indigo-800"
+                        title="Remove"
                       >
-                        {it}
-                        <button
-                          onClick={() => removeInterest(i)}
-                          className="ml-1 text-indigo-600 hover:text-indigo-800"
-                          title="Remove"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                        ×
+                      </button>
+                    </span>
+                  ))}
                 </div>
                 <div className="mt-2 flex gap-2">
                   <input
@@ -188,12 +194,20 @@ export default function ProfilePage() {
                   {saving ? "Saving…" : "Save Profile"}
                 </button>
                 {hasChanges && !saving && (
-                  <span className="text-sm text-amber-600 fade-in-up">Unsaved changes</span>
+                  <span className="text-sm text-amber-600 fade-in-up">
+                    Unsaved changes
+                  </span>
                 )}
                 {message && (
-                  <span className="text-sm text-emerald-600 fade-in-up">{message}</span>
+                  <span className="text-sm text-emerald-600 fade-in-up">
+                    {message}
+                  </span>
                 )}
-                {error && <span className="text-sm text-red-600 fade-in-up">{error}</span>}
+                {error && (
+                  <span className="text-sm text-red-600 fade-in-up">
+                    {error}
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -233,7 +247,9 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="mt-4 text-xs text-gray-500">
-              {savedAt ? `Last saved: ${new Date(savedAt).toLocaleString()}` : "Not saved yet"}
+              {savedAt
+                ? `Last saved: ${new Date(savedAt).toLocaleString()}`
+                : "Not saved yet"}
             </div>
           </div>
 
@@ -241,7 +257,9 @@ export default function ProfilePage() {
           <div className="rounded-2xl border bg-gradient-to-br from-white to-indigo-50 p-5 shadow-sm slide-in-right">
             <h2 className="text-lg font-semibold">Tips</h2>
             <ul className="mt-2 list-disc pl-5 text-sm text-gray-600 space-y-1">
-              <li>Write specific, measurable goals for better AI suggestions.</li>
+              <li>
+                Write specific, measurable goals for better AI suggestions.
+              </li>
               <li>Use 5–10 interests to diversify practice topics.</li>
               <li>Changes are saved securely to your profile.</li>
             </ul>

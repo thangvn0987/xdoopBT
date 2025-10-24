@@ -9,7 +9,10 @@ function clamp01(v) {
 }
 
 function scoreFluency({ duration, segments, words }) {
-  const totalSpeech = segments.reduce((s, x) => s + (x.dur || x.end - x.start), 0);
+  const totalSpeech = segments.reduce(
+    (s, x) => s + (x.dur || x.end - x.start),
+    0
+  );
   const totalPause = Math.max(0, duration - totalSpeech);
   const pauses = [];
   let lastEnd = 0;
@@ -27,9 +30,12 @@ function scoreFluency({ duration, segments, words }) {
 
   const articulationScore = logistic(articulationRate * 25, 0.1, 50); // tuned heuristic
   const pausePenalty = clamp01(longPause / Math.max(1, duration)) * 100;
-  const disfluencyScore = logistic((words?.length || 0), 0.02, 50);
+  const disfluencyScore = logistic(words?.length || 0, 0.02, 50);
 
-  const FLU = 0.4 * articulationScore + 0.3 * (100 - pausePenalty) + 0.3 * disfluencyScore;
+  const FLU =
+    0.4 * articulationScore +
+    0.3 * (100 - pausePenalty) +
+    0.3 * disfluencyScore;
   return { articulationRate, pausePenalty, disfluencyScore, FLU };
 }
 
@@ -59,8 +65,10 @@ function scoreIntelligibility({ mode, werAdjusted = 0.2, avgAsrConf = 0.7 }) {
 
 function adaptiveOverall(levelHint, { SEG, PROS, FLU, INT }) {
   let w = { SEG: 0.35, PROS: 0.25, FLU: 0.25, INT: 0.15 }; // default B1–B2
-  if (levelHint === "A1" || levelHint === "A2") w = { SEG: 0.2, PROS: 0.1, FLU: 0.3, INT: 0.4 };
-  if (levelHint === "C1" || levelHint === "C2") w = { SEG: 0.3, PROS: 0.35, FLU: 0.2, INT: 0.15 };
+  if (levelHint === "A1" || levelHint === "A2")
+    w = { SEG: 0.2, PROS: 0.1, FLU: 0.3, INT: 0.4 };
+  if (levelHint === "C1" || levelHint === "C2")
+    w = { SEG: 0.3, PROS: 0.35, FLU: 0.2, INT: 0.15 };
   const OVERALL = w.SEG * SEG + w.PROS * PROS + w.FLU * FLU + w.INT * INT;
   return { OVERALL, weights: w };
 }
@@ -78,17 +86,32 @@ function scoreAll({ mode, duration, segments, words, alignment, qc }) {
   const flu = scoreFluency({ duration, segments, words });
   // WER proxy from word ops
   const totalRef = Math.max(1, alignment.refWords.length);
-  const wer = (alignment.wordStats.S + alignment.wordStats.D + alignment.wordStats.I) / totalRef;
+  const wer =
+    (alignment.wordStats.S + alignment.wordStats.D + alignment.wordStats.I) /
+    totalRef;
   const pros = scoreProsody({});
-  const intel = scoreIntelligibility({ mode, werAdjusted: wer, avgAsrConf: 0.7 });
+  const intel = scoreIntelligibility({
+    mode,
+    werAdjusted: wer,
+    avgAsrConf: 0.7,
+  });
 
   const levelHint = flu.FLU > 70 ? "B1" : "A2";
-  const overall = adaptiveOverall(levelHint, { ...seg, ...pros, ...flu, ...intel });
+  const overall = adaptiveOverall(levelHint, {
+    ...seg,
+    ...pros,
+    ...flu,
+    ...intel,
+  });
 
   // Feedback heuristics
   const feedback = [];
-  if (alignment.per > 0.3) feedback.push("Work on individual sounds. Practice minimal pairs like /θ/ vs /t/.");
-  if (flu.pausePenalty > 20) feedback.push("Reduce long pauses. Try shadowing 4–7 syllables per run.");
+  if (alignment.per > 0.3)
+    feedback.push(
+      "Work on individual sounds. Practice minimal pairs like /θ/ vs /t/."
+    );
+  if (flu.pausePenalty > 20)
+    feedback.push("Reduce long pauses. Try shadowing 4–7 syllables per run.");
 
   return {
     qc,
