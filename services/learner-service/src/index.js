@@ -6,7 +6,12 @@ const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -40,6 +45,16 @@ async function ensureSchema() {
   );
   CREATE INDEX IF NOT EXISTS idx_sessions_user_time
     ON sessions (user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS learner_profiles (
+    user_id TEXT PRIMARY KEY,
+    goals TEXT,
+    interests TEXT[] DEFAULT ARRAY[]::TEXT[],
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_learner_profiles_updated
+    ON learner_profiles (updated_at DESC);
   `;
   await pool.query(sql);
 }
@@ -180,6 +195,59 @@ app.post("/sessions", requireAuth, async (req, res) => {
       ]
     );
     res.json({ ok: true, id: rows[0]?.id, created_at: rows[0]?.created_at });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Profiles ---
+// Get current user's profile
+app.get("/profiles/me", requireAuth, async (req, res) => {
+  try {
+    const userKey = req.user.id || req.user.email || "unknown";
+    const { rows } = await pool.query(
+      `SELECT user_id, goals, interests, created_at, updated_at
+       FROM learner_profiles WHERE user_id = $1`,
+      [userKey]
+    );
+    if (!rows.length) {
+      return res.json({ exists: false, user_id: userKey, goals: "", interests: [] });
+    }
+    const r = rows[0];
+    res.json({ exists: true, ...r });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Create or update current user's profile
+app.put("/profiles/me", requireAuth, async (req, res) => {
+  try {
+    const userKey = req.user.id || req.user.email || "unknown";
+    let { goals = "", interests = [] } = req.body || {};
+
+    if (typeof goals !== "string") goals = String(goals ?? "");
+    // Normalize interests: accept array of strings or comma-separated string
+    if (typeof interests === "string") {
+      interests = interests
+        .split(/[,\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    if (!Array.isArray(interests)) interests = [];
+    // limit interest length and count for safety
+    interests = interests
+      .slice(0, 30)
+      .map((s) => s.substring(0, 48));
+
+    await pool.query(
+      `INSERT INTO learner_profiles (user_id, goals, interests, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET goals = EXCLUDED.goals, interests = EXCLUDED.interests, updated_at = NOW()`,
+      [userKey, goals, interests]
+    );
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

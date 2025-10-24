@@ -158,9 +158,12 @@ export default function HomePage() {
                       </p>
                     </div>
                   </div>
-                  <button className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">
-                    Settings (coming soon)
-                  </button>
+                  <a
+                    href="/profile"
+                    className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+                  >
+                    Learning Profile
+                  </a>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
