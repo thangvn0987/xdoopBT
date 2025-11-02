@@ -5,7 +5,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Do NOT parse bodies here; we proxy raw requests to backend services.
 
 const GATEWAY_PORT = Number(process.env.GATEWAY_PORT) || 8080;
 const services = {
@@ -13,6 +13,7 @@ const services = {
   learner: `http://learner-service:3000`,
   mentor: `http://mentor-service:3000`,
   ai: `http://ai-service:3000`,
+  pronunciation: `http://pronunciation-assessment:8085`,
   frontend: `http://frontend:3000`,
 };
 
@@ -51,6 +52,57 @@ app.use(
     target: services.ai,
     changeOrigin: true,
     pathRewrite: { "^/api/ai": "" },
+    proxyTimeout: 120000, // 2 minutes timeout for AI processing
+    onProxyReq: (proxyReq, req, res) => {
+      console.log(
+        `[${new Date().toISOString()}] Proxying request from ${
+          req.originalUrl
+        } to ${services.ai}${proxyReq.path}`
+      );
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      console.log(
+        `[${new Date().toISOString()}] Received response from ${services.ai}${
+          req.originalUrl
+        } - Status: ${proxyRes.statusCode}`
+      );
+    },
+    onError: (err, req, res) => {
+      console.error("Proxy error to ai-service:", err);
+      res.writeHead(500, {
+        "Content-Type": "application/json",
+      });
+      res.end(JSON.stringify({ message: "Proxy error", error: err.message }));
+    },
+  })
+);
+
+app.use(
+  "/api/pronunciation",
+  createProxyMiddleware({
+    target: services.pronunciation,
+    changeOrigin: true,
+    pathRewrite: { "^/api/pronunciation": "" },
+    proxyTimeout: 120000,
+    onProxyReq: (proxyReq, req) => {
+      console.log(
+        `[${new Date().toISOString()}] Proxying ${req.method} ${
+          req.originalUrl
+        } -> ${services.pronunciation}${proxyReq.path}`
+      );
+    },
+    onProxyRes: (proxyRes, req) => {
+      console.log(
+        `[${new Date().toISOString()}] Response from pronunciation service for ${
+          req.method
+        } ${req.originalUrl}: ${proxyRes.statusCode}`
+      );
+    },
+    onError: (err, req, res) => {
+      console.error("Proxy error to pronunciation-assessment:", err);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ message: "Proxy error", error: err.message }));
+    },
   })
 );
 

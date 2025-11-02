@@ -18,31 +18,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret";
 // --- Database ---
 const pool = new Pool({ connectionString: DATABASE_URL });
 
-async function ensureSchema() {
-  const sql = `
-  CREATE TABLE IF NOT EXISTS pronunciation_sessions (
-    id BIGSERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    score NUMERIC NOT NULL CHECK (score >= 0 AND score <= 100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_pronunciation_sessions_user_time
-    ON pronunciation_sessions (user_id, created_at DESC);
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id BIGSERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    topic TEXT,
-    transcript TEXT,
-    ai_score NUMERIC CHECK (ai_score >= 0 AND ai_score <= 100),
-    grammar_feedback JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_sessions_user_time
-    ON sessions (user_id, created_at DESC);
-  `;
-  await pool.query(sql);
-}
+// The database schema is now managed by the init scripts in the /database/init folder.
+// The ensureSchema function has been removed.
 
 // --- Auth helper ---
 function getTokenFromReq(req) {
@@ -94,14 +71,12 @@ app.get("/health", async (req, res) => {
       time: new Date().toISOString(),
     });
   } catch (e) {
-    res
-      .status(500)
-      .json({
-        status: "error",
-        service: SERVICE_NAME,
-        db: false,
-        error: e.message,
-      });
+    res.status(500).json({
+      status: "error",
+      service: SERVICE_NAME,
+      db: false,
+      error: e.message,
+    });
   }
 });
 
@@ -185,14 +160,121 @@ app.post("/sessions", requireAuth, async (req, res) => {
   }
 });
 
+// --- Profile Endpoints ---
+
+// Get user profile
+app.get("/profile", requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT display_name, full_name, avatar_url, native_language, learning_target FROM users WHERE id = $1",
+      [req.user.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update user profile
+app.put("/profile", requireAuth, async (req, res) => {
+  try {
+    const {
+      display_name,
+      full_name,
+      avatar_url,
+      native_language,
+      learning_target,
+    } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE users
+       SET
+         display_name = COALESCE($1, display_name),
+         full_name = COALESCE($2, full_name),
+         avatar_url = COALESCE($3, avatar_url),
+         native_language = COALESCE($4, native_language),
+         learning_target = COALESCE($5, learning_target)
+       WHERE id = $6
+       RETURNING display_name, full_name, avatar_url, native_language, learning_target`,
+      [
+        display_name,
+        full_name,
+        avatar_url,
+        native_language,
+        learning_target,
+        req.user.id,
+      ]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// --- Preferences Endpoints ---
+
+// Get user preferences
+app.get("/preferences", requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM user_preferences WHERE user_id = $1",
+      [req.user.id]
+    );
+    if (rows.length === 0) {
+      // If no preferences, return default values
+      return res.json({
+        user_id: req.user.id,
+        learning_goal: "GENERAL_CONVERSATION",
+        preferred_accent: "NEUTRAL",
+        daily_practice_goal_minutes: 15,
+        notification_enabled: false,
+      });
+    }
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update user preferences
+app.put("/preferences", requireAuth, async (req, res) => {
+  try {
+    const {
+      learning_goal,
+      preferred_accent,
+      daily_practice_goal_minutes,
+      notification_enabled,
+    } = req.body;
+    const { rows } = await pool.query(
+      `INSERT INTO user_preferences (user_id, learning_goal, preferred_accent, daily_practice_goal_minutes, notification_enabled)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         learning_goal = EXCLUDED.learning_goal,
+         preferred_accent = EXCLUDED.preferred_accent,
+         daily_practice_goal_minutes = EXCLUDED.daily_practice_goal_minutes,
+         notification_enabled = EXCLUDED.notification_enabled
+       RETURNING *`,
+      [
+        req.user.id,
+        learning_goal,
+        preferred_accent,
+        daily_practice_goal_minutes,
+        notification_enabled,
+      ]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Startup
-ensureSchema()
-  .then(() => {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`${SERVICE_NAME} listening on port ${PORT}`);
-    });
-  })
-  .catch((e) => {
-    console.error("Failed to ensure schema:", e);
-    process.exit(1);
-  });
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`${SERVICE_NAME} listening on port ${PORT}`);
+});

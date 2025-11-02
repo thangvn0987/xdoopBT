@@ -8,6 +8,10 @@ export default function LevelTest() {
   const [topic, setTopic] = React.useState(
     "Introduce yourself and your goals."
   );
+  const [reference, setReference] = React.useState("");
+  const [generating, setGenerating] = React.useState(false);
+  const [sentenceCount, setSentenceCount] = React.useState(5);
+  const [lengthHint, setLengthHint] = React.useState("short");
   const [seconds, setSeconds] = React.useState(0);
   const timerRef = React.useRef(null);
   const [analyzing, setAnalyzing] = React.useState(false);
@@ -135,12 +139,135 @@ export default function LevelTest() {
     }
   };
 
+  async function generateScript() {
+    setError("");
+    setGenerating(true);
+    try {
+      let headers = { "Content-Type": "application/json" };
+      try {
+        const t = localStorage.getItem("aesp_token");
+        if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
+      } catch {}
+
+      const resp = await fetch("/api/ai/generate-script", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          category,
+          topicHint: topic,
+          sentences: sentenceCount,
+          length: lengthHint,
+          level: "A2-B1",
+        }),
+      });
+      if (!resp.ok) {
+        let msg = "Failed to generate script";
+        try {
+          const j = await resp.json();
+          msg = j.error || j.detail || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const data = await resp.json();
+      setReference(data.text || "");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // Convert recorded WebM/Opus to 16-bit PCM WAV using Web Audio decode + re-encode
+  async function webmToWavBlob(webmBlob, targetSampleRate) {
+    const arrayBuf = await webmBlob.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    let audioBuffer;
+    try {
+      audioBuffer = await ctx.decodeAudioData(arrayBuf);
+    } catch (e) {
+      ctx.close?.();
+      throw new Error("Failed to decode audio. Please try again.");
+    }
+    // Downmix to mono
+    const channelData =
+      audioBuffer.numberOfChannels > 1
+        ? (() => {
+            const ch0 = audioBuffer.getChannelData(0);
+            const ch1 = audioBuffer.getChannelData(1);
+            const out = new Float32Array(audioBuffer.length);
+            for (let i = 0; i < out.length; i++) out[i] = (ch0[i] + ch1[i]) / 2;
+            return out;
+          })()
+        : audioBuffer.getChannelData(0);
+
+    const srcRate = audioBuffer.sampleRate;
+    const dstRate = targetSampleRate || srcRate;
+
+    // Resample if needed (simple linear interpolation)
+    let pcmFloat;
+    if (srcRate === dstRate) {
+      pcmFloat = channelData;
+    } else {
+      const ratio = srcRate / dstRate;
+      const newLen = Math.round(channelData.length / ratio);
+      pcmFloat = new Float32Array(newLen);
+      for (let i = 0; i < newLen; i++) {
+        const srcIndex = i * ratio;
+        const i0 = Math.floor(srcIndex);
+        const i1 = Math.min(channelData.length - 1, i0 + 1);
+        const t = srcIndex - i0;
+        pcmFloat[i] = channelData[i0] * (1 - t) + channelData[i1] * t;
+      }
+    }
+
+    // Encode WAV (PCM 16-bit mono)
+    const buffer = new ArrayBuffer(44 + pcmFloat.length * 2);
+    const view = new DataView(buffer);
+
+    function writeString(off, str) {
+      for (let i = 0; i < str.length; i++)
+        view.setUint8(off + i, str.charCodeAt(i));
+    }
+    function floatTo16BitPCM(output, offset, input) {
+      for (let i = 0; i < input.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, input[i]));
+        s = s < 0 ? s * 0x8000 : s * 0x7fff;
+        view.setInt16(offset, s, true);
+      }
+    }
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + pcmFloat.length * 2, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true); // format PCM
+    view.setUint16(22, 1, true); // channels: mono
+    view.setUint32(24, dstRate, true); // sample rate
+    view.setUint32(28, dstRate * 2, true); // byte rate (sampleRate * blockAlign)
+    view.setUint16(32, 2, true); // block align (channels * bytesPerSample)
+    view.setUint16(34, 16, true); // bits per sample
+    writeString(36, "data");
+    view.setUint32(40, pcmFloat.length * 2, true);
+
+    floatTo16BitPCM(view, 44, pcmFloat);
+
+    const wavBlob = new Blob([view], { type: "audio/wav" });
+    await ctx.close();
+    return wavBlob;
+  }
+
   async function submit(blob) {
     try {
-      // 1) Call AI service for analysis
+      // Convert WebM to WAV for pronunciation service
+      const wav = await webmToWavBlob(blob, 16000); // 16kHz mono PCM
+
+      // 1) Call Pronunciation Assessment API
       const fd = new FormData();
-      fd.append("audio", blob, "level-test.webm");
-      fd.append("topic", topic);
+      fd.append("audio", wav, "level-test.wav");
+      fd.append("referenceText", reference || topic);
+      fd.append("granularity", "Word"); // or Phoneme/FullText
 
       let headers = {};
       try {
@@ -148,40 +275,36 @@ export default function LevelTest() {
         if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
       } catch {}
 
-      const aiRes = await fetch("/api/ai/level-test", {
+      const aiRes = await fetch("/api/pronunciation/assess", {
         method: "POST",
         body: fd,
         headers,
       });
-      if (!aiRes.ok) throw new Error("AI service error");
-      const aiData = await aiRes.json();
 
-      // 2) Persist to learner-service
-      const lsRes = await fetch("/api/learners/sessions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(headers.Authorization
-            ? { Authorization: headers.Authorization }
-            : {}),
-        },
-        body: JSON.stringify({
-          topic: "initial-level-test",
-          ai_score: aiData.ai_score,
-          transcript: aiData.transcript,
-          grammar_feedback: aiData.grammar_feedback,
-        }),
-        credentials: "include",
-      });
-      if (!lsRes.ok) throw new Error("Persist error");
+      if (!aiRes.ok) {
+        let errorBody = "Pronunciation service error";
+        try {
+          const errJson = await aiRes.json();
+          errorBody = errJson.detail || errJson.error || errorBody;
+        } catch {}
+        throw new Error(errorBody);
+      }
+      const pa = await aiRes.json();
 
       setResult({
-        score: aiData.ai_score,
-        transcript: aiData.transcript,
-        feedback: aiData.grammar_feedback,
+        pronScore: pa?.scores?.pronScore ?? null,
+        accuracyScore: pa?.scores?.accuracyScore ?? null,
+        fluencyScore: pa?.scores?.fluencyScore ?? null,
+        completenessScore: pa?.scores?.completenessScore ?? null,
+        prosodyScore: pa?.scores?.prosodyScore ?? null,
+        text: pa?.text || "",
+        raw: pa?.raw || null,
       });
     } catch (e) {
+      console.error("Submit failed:", e);
       setError(e.message);
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -241,6 +364,47 @@ export default function LevelTest() {
               </div>
             </div>
 
+            {/* Script controls */}
+            <div className="mt-3 grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium">Sentences</label>
+                <select
+                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                  value={sentenceCount}
+                  onChange={(e) =>
+                    setSentenceCount(parseInt(e.target.value, 10))
+                  }
+                >
+                  {[3, 5, 7, 10].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Length</label>
+                <select
+                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
+                  value={lengthHint}
+                  onChange={(e) => setLengthHint(e.target.value)}
+                >
+                  <option value="short">Short</option>
+                  <option value="medium">Medium</option>
+                  <option value="long">Long</option>
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={generateScript}
+                  disabled={generating}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                >
+                  {generating ? "Generating..." : "Generate Script"}
+                </button>
+              </div>
+            </div>
+
             <div
               className="mt-3 flex flex-wrap gap-2"
               aria-label="Topic suggestions"
@@ -293,7 +457,13 @@ export default function LevelTest() {
                   }`}
                 />
                 <span className="text-sm text-gray-600">
-                  {recording ? "Recording" : analyzing ? "Analyzing" : "Idle"}
+                  {recording
+                    ? "Recording"
+                    : analyzing
+                    ? "Analyzing"
+                    : generating
+                    ? "Preparing script"
+                    : "Idle"}
                 </span>
               </div>
               <div className="text-sm font-mono tabular-nums text-gray-700">
@@ -310,6 +480,23 @@ export default function LevelTest() {
                   style={{ height: `${h}%` }}
                 />
               ))}
+            </div>
+
+            {/* Script area */}
+            <div className="mt-5">
+              <label className="block text-sm font-medium">
+                Script to read
+              </label>
+              <textarea
+                className="mt-1 w-full min-h-[100px] border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                placeholder="Click Generate Script or paste your own text here..."
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                This text will be used as reference for pronunciation
+                assessment.
+              </div>
             </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -371,79 +558,59 @@ export default function LevelTest() {
                     className="relative w-28 h-28 rounded-full grid place-items-center"
                     style={{
                       background: `conic-gradient(#4f46e5 ${
-                        result.score * 3.6
+                        (result.pronScore || 0) * 3.6
                       }deg, #e5e7eb 0deg)`,
                     }}
                   >
                     <div className="absolute inset-2 rounded-full bg-white grid place-items-center">
                       <div className="text-2xl font-bold text-indigo-700">
-                        {result.score}
+                        {Math.round(result.pronScore ?? 0)}
                       </div>
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-500">Overall Score</div>
+                    <div className="text-sm text-gray-500">
+                      Overall Pronunciation
+                    </div>
                     <div className="text-lg font-semibold">
-                      Estimated CEFR: {result?.feedback?.level || "-"}
+                      Reference topic: {topic}
                     </div>
                     <div className="text-xs text-gray-500">
                       Higher is better (0–100)
                     </div>
                   </div>
                 </div>
-
-                {/* Summary */}
-                {result.feedback?.summary && (
-                  <div className="rounded-xl border p-4">
-                    <div className="text-sm font-medium">Summary</div>
-                    <p className="mt-1 text-sm text-gray-700 whitespace-pre-wrap">
-                      {result.feedback.summary}
-                    </p>
-                  </div>
-                )}
-
-                {/* Issues & Corrections */}
+                {/* Sub-scores */}
                 <div className="grid md:grid-cols-2 gap-4">
-                  <div className="rounded-xl border p-4">
-                    <div className="text-sm font-medium">Issues</div>
-                    {Array.isArray(result.feedback?.issues) &&
-                    result.feedback.issues.length > 0 ? (
-                      <ul className="mt-2 list-disc pl-5 text-sm text-gray-700 space-y-1">
-                        {result.feedback.issues.map((it, i) => (
-                          <li key={i}>{it}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="mt-2 text-sm text-gray-500">
-                        No significant issues detected.
-                      </div>
-                    )}
+                  <div className="rounded-xl border p-4 space-y-2">
+                    <div className="text-sm font-medium">Sub-scores</div>
+                    <div className="text-sm text-gray-700">
+                      Accuracy: {result.accuracyScore ?? "-"}
+                    </div>
+                    <div className="text-sm text-gray-700">
+                      Fluency: {result.fluencyScore ?? "-"}
+                    </div>
+                    <div className="text-sm text-gray-700">
+                      Completeness: {result.completenessScore ?? "-"}
+                    </div>
+                    <div className="text-sm text-gray-700">
+                      Prosody: {result.prosodyScore ?? "-"}
+                    </div>
                   </div>
                   <div className="rounded-xl border p-4">
-                    <div className="text-sm font-medium">Corrections</div>
-                    {Array.isArray(result.feedback?.corrections) &&
-                    result.feedback.corrections.length > 0 ? (
-                      <ul className="mt-2 list-disc pl-5 text-sm text-gray-700 space-y-1">
-                        {result.feedback.corrections.map((c, i) => (
-                          <li key={i}>
-                            <span className="text-gray-500">{c.from}</span> →{" "}
-                            <span>{c.to}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="mt-2 text-sm text-gray-500">
-                        No corrections suggested.
-                      </div>
-                    )}
+                    <div className="text-sm font-medium">Tips</div>
+                    <div className="mt-2 text-sm text-gray-500">
+                      Improve by speaking clearly, maintaining steady pace, and
+                      finishing sentences.
+                    </div>
                   </div>
                 </div>
 
                 {/* Transcript */}
                 <div className="rounded-xl border p-4">
-                  <div className="text-sm font-medium">Transcript</div>
+                  <div className="text-sm font-medium">Recognized Text</div>
                   <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
-                    {result.transcript || "(empty)"}
+                    {result.text || "(empty)"}
                   </div>
                 </div>
               </div>
