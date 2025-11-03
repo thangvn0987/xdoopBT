@@ -23,41 +23,10 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_jwt_secret";
 // --- Database ---
 const pool = new Pool({ connectionString: DATABASE_URL });
 
-async function ensureSchema() {
-  const sql = `
-  CREATE TABLE IF NOT EXISTS pronunciation_sessions (
-    id BIGSERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    score NUMERIC NOT NULL CHECK (score >= 0 AND score <= 100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_pronunciation_sessions_user_time
-    ON pronunciation_sessions (user_id, created_at DESC);
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id BIGSERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    topic TEXT,
-    transcript TEXT,
-    ai_score NUMERIC CHECK (ai_score >= 0 AND ai_score <= 100),
-    grammar_feedback JSONB,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_sessions_user_time
-    ON sessions (user_id, created_at DESC);
-
-  CREATE TABLE IF NOT EXISTS learner_profiles (
-    user_id TEXT PRIMARY KEY,
-    goals TEXT,
-    interests TEXT[] DEFAULT ARRAY[]::TEXT[],
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
-  CREATE INDEX IF NOT EXISTS idx_learner_profiles_updated
-    ON learner_profiles (updated_at DESC);
-  `;
-  await pool.query(sql);
-}
+// The database schema is now managed by the init scripts in the /database/init folder.
+// The ensureSchema function has been removed.
+// The database schema is now managed by the init scripts in the /database/init folder.
+// The ensureSchema function has been removed.
 
 // --- Auth helper ---
 function getTokenFromReq(req) {
@@ -109,14 +78,12 @@ app.get("/health", async (req, res) => {
       time: new Date().toISOString(),
     });
   } catch (e) {
-    res
-      .status(500)
-      .json({
-        status: "error",
-        service: SERVICE_NAME,
-        db: false,
-        error: e.message,
-      });
+    res.status(500).json({
+      status: "error",
+      service: SERVICE_NAME,
+      db: false,
+      error: e.message,
+    });
   }
 });
 
@@ -201,7 +168,7 @@ app.post("/sessions", requireAuth, async (req, res) => {
 });
 
 // --- Profiles ---
-// Get current user's profile
+// Get current user's profile (learner_profiles)
 app.get("/profiles/me", requireAuth, async (req, res) => {
   try {
     const userKey = req.user.id || req.user.email || "unknown";
@@ -211,7 +178,12 @@ app.get("/profiles/me", requireAuth, async (req, res) => {
       [userKey]
     );
     if (!rows.length) {
-      return res.json({ exists: false, user_id: userKey, goals: "", interests: [] });
+      return res.json({
+        exists: false,
+        user_id: userKey,
+        goals: "",
+        interests: [],
+      });
     }
     const r = rows[0];
     res.json({ exists: true, ...r });
@@ -236,9 +208,7 @@ app.put("/profiles/me", requireAuth, async (req, res) => {
     }
     if (!Array.isArray(interests)) interests = [];
     // limit interest length and count for safety
-    interests = interests
-      .slice(0, 30)
-      .map((s) => s.substring(0, 48));
+    interests = interests.slice(0, 30).map((s) => s.substring(0, 48));
 
     await pool.query(
       `INSERT INTO learner_profiles (user_id, goals, interests, created_at, updated_at)
@@ -254,13 +224,6 @@ app.put("/profiles/me", requireAuth, async (req, res) => {
 });
 
 // Startup
-ensureSchema()
-  .then(() => {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`${SERVICE_NAME} listening on port ${PORT}`);
-    });
-  })
-  .catch((e) => {
-    console.error("Failed to ensure schema:", e);
-    process.exit(1);
-  });
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`${SERVICE_NAME} listening on port ${PORT}`);
+});

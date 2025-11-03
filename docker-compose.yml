@@ -70,6 +70,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       OPENAI_MODEL_TTS: ${OPENAI_MODEL_TTS}
       OPENAI_MODEL_WHISPER: ${OPENAI_MODEL_WHISPER}
       DATABASE_URL: ${DATABASE_URL}
@@ -79,6 +80,25 @@ services:
     depends_on:
       - postgres
     # No public port; reachable at http://ai-service:3000
+    networks:
+      - aesp_net
+
+  pronunciation-assessment:
+    build: ./pronunciation-assessment
+    container_name: aesp_pronunciation
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: 8085
+      SPEECH_KEY: ${SPEECH_KEY}
+      SPEECH_REGION: ${SPEECH_REGION}
+      SPEECH_ENDPOINT: ${SPEECH_ENDPOINT}
+      ALLOWED_ORIGINS: ${CORS_ORIGIN}
+    volumes:
+      - ./pronunciation-assessment/uploads:/app/uploads
+    depends_on:
+      - postgres
+    # Internal-only; reachable at http://pronunciation-assessment:8085
     networks:
       - aesp_net
 
