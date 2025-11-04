@@ -1,5 +1,15 @@
 import React from "react";
 
+function currencyVND(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "-";
+  try {
+    return new Intl.NumberFormat("vi-VN").format(num) + " VND";
+  } catch {
+    return `${num} VND`;
+  }
+}
+
 export default function HomePage() {
   const [user, setUser] = React.useState(null);
   const [pron, setPron] = React.useState({
@@ -96,6 +106,38 @@ export default function HomePage() {
   const toggleOpen = () => setOpen((o) => !o);
   const close = () => setOpen(false);
 
+  // Subscription summary for quick access
+  const [sub, setSub] = React.useState({ loading: true, exists: false, data: null });
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        let headers = { Accept: "application/json" };
+        try {
+          const t = localStorage.getItem("aesp_token");
+          if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
+        } catch {}
+        const res = await fetch("/api/learners/subscriptions/me", {
+          credentials: "include",
+          headers,
+        });
+        if (!cancelled) {
+          if (res.ok) {
+            const data = await res.json();
+            setSub({ loading: false, exists: !!data.exists, data: data.subscription || null });
+          } else {
+            setSub({ loading: false, exists: false, data: null });
+          }
+        }
+      } catch {
+        if (!cancelled) setSub({ loading: false, exists: false, data: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       {/* Top bar */}
@@ -116,7 +158,33 @@ export default function HomePage() {
               <a className="hover:text-indigo-600" href="#reports">
                 Reports
               </a>
+              <a className="hover:text-indigo-600" href="/plans">
+                Plans
+              </a>
             </nav>
+            {/* Current plan pill */}
+            <a
+              href="/plans"
+              className="hidden md:inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-xs text-gray-700 hover:bg-gray-50"
+              title="View plans"
+            >
+              {sub.loading ? (
+                <span>Checking plan…</span>
+              ) : sub.exists ? (
+                <>
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="font-medium truncate max-w-[10rem]">
+                    {sub.data?.plan_name || "Plan"}
+                  </span>
+                  <span className="text-gray-500">· {currencyVND(sub.data?.price_vnd)}</span>
+                  {sub.data?.cancel_at_period_end && (
+                    <span className="ml-1 text-amber-700">(will cancel)</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-gray-600">Choose plan</span>
+              )}
+            </a>
             <div className="relative">
               <button
                 onClick={toggleOpen}
@@ -164,6 +232,12 @@ export default function HomePage() {
                   >
                     Learning Profile
                   </a>
+                  <a
+                    href="/plans"
+                    className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+                  >
+                    Plans & Billing
+                  </a>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -199,6 +273,12 @@ export default function HomePage() {
               >
                 <span>Take Level Test</span>
               </a>
+              <a
+                href="/plans"
+                className="inline-flex items-center gap-2 bg-white/20 text-white font-medium px-4 py-2 rounded hover:bg-white/25 border border-white/30"
+              >
+                <span>Plans & Billing</span>
+              </a>
             </div>
           </div>
         </section>
@@ -217,6 +297,12 @@ export default function HomePage() {
               desc: "Speak and get instant feedback",
               cta: "Practice",
               anchor: "#ai",
+            },
+            {
+              title: "Plans & Billing",
+              desc: "Choose or manage your plan",
+              cta: "Open",
+              anchor: "/plans",
             },
             {
               title: "Community Rooms",
@@ -401,45 +487,37 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Packages */}
+        {/* Plans quick access */}
         <section className="mb-10">
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Upgrade Your Learning</h3>
-            <p className="text-sm text-gray-500">
-              Choose a package that fits your goals
-            </p>
-            <div className="mt-4 grid sm:grid-cols-3 gap-3">
-              {[
-                {
-                  name: "Basic",
-                  price: "$0",
-                  features: ["AI practice", "Weekly report"],
-                },
-                {
-                  name: "Plus",
-                  price: "$9/mo",
-                  features: ["All Basic", "Mentor feedback", "Community rooms"],
-                },
-                {
-                  name: "Premium",
-                  price: "$19/mo",
-                  features: ["All Plus", "1:1 Mentor", "Advanced analytics"],
-                },
-              ].map((p) => (
-                <div key={p.name} className="rounded-lg border p-4">
-                  <p className="font-semibold">{p.name}</p>
-                  <p className="text-xl mt-1">{p.price}</p>
-                  <ul className="mt-2 text-sm text-gray-600 list-disc pl-5 space-y-1">
-                    {p.features.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
-                  <button className="mt-3 w-full px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500">
-                    Choose
-                  </button>
+          <div className="rounded-xl border bg-white p-4 flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <h3 className="font-semibold mb-1">Plans & Billing</h3>
+              {sub.loading ? (
+                <p className="text-sm text-gray-500">Loading…</p>
+              ) : sub.exists ? (
+                <div className="text-sm text-gray-700">
+                  <span className="font-medium">Current:</span>{" "}
+                  {sub.data?.plan_name || "—"} · {currencyVND(sub.data?.price_vnd)} / month
+                  <span className="text-gray-500"> · Renewal:</span>{" "}
+                  {sub.data?.current_period_end
+                    ? new Date(sub.data.current_period_end).toLocaleDateString("vi-VN")
+                    : "—"}
+                  {sub.data?.cancel_at_period_end && (
+                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-200">
+                      Will cancel at end of cycle
+                    </span>
+                  )}
                 </div>
-              ))}
+              ) : (
+                <p className="text-sm text-gray-700">You don’t have a subscription yet.</p>
+              )}
             </div>
+            <a
+              href="/plans"
+              className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
+            >
+              Open Plans
+            </a>
           </div>
         </section>
       </main>
