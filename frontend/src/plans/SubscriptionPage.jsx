@@ -226,15 +226,24 @@ export default function SubscriptionPage() {
                 onChoose={async () => {
                   if (canDemoSwitchToBasic) {
                     try {
-                      const res = await fetch(`/api/learners/subscriptions/demo/set-plan`, {
-                        method: "POST",
-                        credentials: "include",
-                        headers: { ...authHeaders, "Content-Type": "application/json" },
-                        body: JSON.stringify({ plan_id: basicPlan.id }),
-                      });
+                      const res = await fetch(
+                        `/api/learners/subscriptions/demo/set-plan`,
+                        {
+                          method: "POST",
+                          credentials: "include",
+                          headers: {
+                            ...authHeaders,
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({ plan_id: basicPlan.id }),
+                        }
+                      );
                       if (!res.ok) {
                         let msg = "Switch failed";
-                        try { const d = await res.json(); if (d?.error) msg = d.error; } catch {}
+                        try {
+                          const d = await res.json();
+                          if (d?.error) msg = d.error;
+                        } catch {}
                         throw new Error(msg);
                       }
                       await refresh();

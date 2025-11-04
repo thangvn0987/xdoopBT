@@ -51,7 +51,9 @@ async function ensureSubscriptionsSchema() {
   `);
 
   // 2) Subscriptions table — create if missing; otherwise migrate columns
-  await pool.query(`
+  await pool
+    .query(
+      `
     CREATE TABLE IF NOT EXISTS subscriptions (
       id BIGSERIAL PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -63,15 +65,22 @@ async function ensureSubscriptionsSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-  `).catch(() => {});
+  `
+    )
+    .catch(() => {});
 
   // Migration path: older table version without id/plan_id
-  await pool.query(`
+  await pool
+    .query(
+      `
     ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS id BIGSERIAL;
-  `).catch(() => {});
+  `
+    )
+    .catch(() => {});
   // Drop old primary key on user_id if exists, then set pk on id
   await pool
-    .query(`DO $$ BEGIN
+    .query(
+      `DO $$ BEGIN
       BEGIN
         ALTER TABLE subscriptions DROP CONSTRAINT subscriptions_pkey;
       EXCEPTION WHEN undefined_object THEN NULL;
@@ -80,7 +89,8 @@ async function ensureSubscriptionsSchema() {
         ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
       EXCEPTION WHEN duplicate_object THEN NULL;
       END;
-    END $$;`)
+    END $$;`
+    )
     .catch(() => {});
 
   await pool.query(`
@@ -440,7 +450,9 @@ app.post("/subscriptions/upgrade", requireAuth, async (req, res) => {
     await client.query("COMMIT");
     res.json({ ok: true, charged_vnd: quote.amount_due_now_vnd });
   } catch (e) {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     res.status(400).json({ error: e.message });
   } finally {
     client.release();
@@ -459,7 +471,8 @@ app.post("/subscriptions/demo/set-plan", requireAuth, async (req, res) => {
       `SELECT id, price_vnd FROM plans WHERE id = $1`,
       [plan_id]
     );
-    if (!planRes.rows.length) return res.status(404).json({ error: "Plan not found" });
+    if (!planRes.rows.length)
+      return res.status(404).json({ error: "Plan not found" });
 
     const sub = await getActiveSubscription(userId);
     if (!sub) {
@@ -483,7 +496,7 @@ app.post("/subscriptions/demo/set-plan", requireAuth, async (req, res) => {
     await pool.query(
       `INSERT INTO payments (user_id, subscription_id, amount_vnd, kind, status, metadata)
        VALUES ($1, $2, 0, 'demo_switch', 'succeeded', $3)`,
-      [userId, sub.id, JSON.stringify({ demo: true, note: 'force set plan' })]
+      [userId, sub.id, JSON.stringify({ demo: true, note: "force set plan" })]
     );
     res.json({ ok: true, demo: true });
   } catch (e) {

@@ -107,7 +107,11 @@ export default function HomePage() {
   const close = () => setOpen(false);
 
   // Subscription summary for quick access
-  const [sub, setSub] = React.useState({ loading: true, exists: false, data: null });
+  const [sub, setSub] = React.useState({
+    loading: true,
+    exists: false,
+    data: null,
+  });
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,7 +128,11 @@ export default function HomePage() {
         if (!cancelled) {
           if (res.ok) {
             const data = await res.json();
-            setSub({ loading: false, exists: !!data.exists, data: data.subscription || null });
+            setSub({
+              loading: false,
+              exists: !!data.exists,
+              data: data.subscription || null,
+            });
           } else {
             setSub({ loading: false, exists: false, data: null });
           }
@@ -176,7 +184,9 @@ export default function HomePage() {
                   <span className="font-medium truncate max-w-[10rem]">
                     {sub.data?.plan_name || "Plan"}
                   </span>
-                  <span className="text-gray-500">· {currencyVND(sub.data?.price_vnd)}</span>
+                  <span className="text-gray-500">
+                    · {currencyVND(sub.data?.price_vnd)}
+                  </span>
                   {sub.data?.cancel_at_period_end && (
                     <span className="ml-1 text-amber-700">(will cancel)</span>
                   )}
@@ -497,10 +507,13 @@ export default function HomePage() {
               ) : sub.exists ? (
                 <div className="text-sm text-gray-700">
                   <span className="font-medium">Current:</span>{" "}
-                  {sub.data?.plan_name || "—"} · {currencyVND(sub.data?.price_vnd)} / month
+                  {sub.data?.plan_name || "—"} ·{" "}
+                  {currencyVND(sub.data?.price_vnd)} / month
                   <span className="text-gray-500"> · Renewal:</span>{" "}
                   {sub.data?.current_period_end
-                    ? new Date(sub.data.current_period_end).toLocaleDateString("vi-VN")
+                    ? new Date(sub.data.current_period_end).toLocaleDateString(
+                        "vi-VN"
+                      )
                     : "—"}
                   {sub.data?.cancel_at_period_end && (
                     <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-200">
@@ -509,7 +522,9 @@ export default function HomePage() {
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-gray-700">You don’t have a subscription yet.</p>
+                <p className="text-sm text-gray-700">
+                  You don’t have a subscription yet.
+                </p>
               )}
             </div>
             <a
