@@ -15,6 +15,35 @@ services:
     networks:
       - aesp_net
 
+  # Runs all SQL files in ./database/init against the running Postgres on every `docker compose up`.
+  # Scripts must be idempotent (use IF NOT EXISTS, etc.). This ensures new migrations like 011/012
+  # are applied automatically even when the data volume already exists.
+  db-migrator:
+    image: postgres:16
+    container_name: aesp_db_migrator
+    depends_on:
+      - postgres
+    restart: "no"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./database/init:/migrations:ro
+    entrypoint: ["bash","-lc"]
+    command: >-
+      'set -e;
+       echo "[db-migrator] Waiting for Postgres...";
+       until pg_isready -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do sleep 1; done;
+       echo "[db-migrator] Applying SQL migrations from /migrations";
+       for f in $(ls -1 /migrations/*.sql 2>/dev/null | sort); do
+         echo "[db-migrator] -> $f";
+         PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$f";
+       done;
+       echo "[db-migrator] Done."'
+    networks:
+      - aesp_net
+
   auth-service:
     build: ./services/auth-service
     container_name: aesp_auth
@@ -31,6 +60,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
     depends_on:
       - postgres
+      - db-migrator
     # No public port; reachable inside network at http://auth-service:3000
     networks:
       - aesp_net
@@ -45,6 +75,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - postgres
+      - db-migrator
     # No public port; reachable at http://learner-service:3000
     networks:
       - aesp_net
@@ -59,6 +90,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       - postgres
+      - db-migrator
     # No public port; reachable at http://mentor-service:3000
     networks:
       - aesp_net
@@ -79,6 +111,7 @@ services:
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
     depends_on:
       - postgres
+      - db-migrator
     # No public port; reachable at http://ai-service:3000
     networks:
       - aesp_net
