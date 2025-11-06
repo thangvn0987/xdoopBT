@@ -1,4 +1,13 @@
 import React from "react";
+import {
+  Typography,
+  Card,
+  CardContent,
+  Button,
+  Grid,
+  Stack,
+  Box,
+} from "@mui/material";
 
 export default function HomePage() {
   const [user, setUser] = React.useState(null);
@@ -97,111 +106,37 @@ export default function HomePage() {
   const close = () => setOpen(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-indigo-600" />
-            <span className="font-semibold">AESP</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <nav className="hidden sm:flex items-center gap-4 text-sm">
-              <a className="hover:text-indigo-600" href="#ai">
-                AI Conversation
-              </a>
-              <a className="hover:text-indigo-600" href="#community">
-                Community
-              </a>
-              <a className="hover:text-indigo-600" href="#reports">
-                Reports
-              </a>
-            </nav>
-            <div className="relative">
-              <button
-                onClick={toggleOpen}
-                className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold overflow-hidden border border-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              >
-                {user?.avatar ? (
-                  <img
-                    src={user.avatar}
-                    alt="Profile"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span>{initials}</span>
-                )}
-              </button>
-              {open && (
-                <div
-                  className="absolute right-0 mt-2 w-56 rounded-xl border bg-white shadow-lg z-20"
-                  onMouseLeave={close}
-                >
-                  <div className="p-3 flex items-center gap-3 border-b">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold overflow-hidden border border-indigo-200">
-                      {user?.avatar ? (
-                        <img
-                          src={user.avatar}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span>{initials}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate">
-                        {user?.name || "User"}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {user?.email || ""}
-                      </p>
-                    </div>
-                  </div>
-                  <button className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">
-                    Settings (coming soon)
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto px-4 py-6">
+    <Box>
+      <main>
         {/* Hero / Welcome */}
-        <section className="mb-6">
-          <div className="rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-6 shadow">
-            <h1 className="text-2xl font-bold">Welcome back 👋</h1>
-            <p className="mt-1 opacity-90">
-              Practice English speaking with AI—confidence grows with every
-              session.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <a
-                href="#ai"
-                className="inline-flex items-center gap-2 bg-white text-indigo-700 font-medium px-4 py-2 rounded hover:opacity-95"
-              >
-                <span>Start AI Conversation</span>
-              </a>
-              <a
-                href="/level-test"
-                className="inline-flex items-center gap-2 bg-indigo-500 text-white font-medium px-4 py-2 rounded hover:bg-indigo-400"
-              >
-                <span>Take Level Test</span>
-              </a>
-            </div>
-          </div>
-        </section>
+        <Box
+          sx={{
+            mb: 3,
+            p: 3,
+            borderRadius: 2,
+            bgcolor: "primary.main",
+            color: "primary.contrastText",
+          }}
+        >
+          <Typography variant="h5" fontWeight={700}>
+            Welcome back 👋
+          </Typography>
+          <Typography sx={{ opacity: 0.9, mt: 0.5 }}>
+            Practice English speaking with AI—confidence grows with every
+            session.
+          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+            <Button href="#ai" variant="contained" color="inherit">
+              Start AI Conversation
+            </Button>
+            <Button href="/level-test" variant="outlined" color="inherit">
+              Take Level Test
+            </Button>
+          </Stack>
+        </Box>
 
         {/* Quick Actions */}
-        <section className="grid md:grid-cols-3 gap-4 mb-6">
+        <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
             {
               title: "AI Level Test",
@@ -222,224 +157,372 @@ export default function HomePage() {
               anchor: "#community",
             },
           ].map((c) => (
-            <a
-              key={c.title}
-              href={c.anchor}
-              className="rounded-xl border bg-white p-4 hover:shadow transition-shadow"
-            >
-              <h3 className="font-semibold">{c.title}</h3>
-              <p className="text-sm text-gray-500 mt-1">{c.desc}</p>
-              <div className="mt-3 inline-flex items-center gap-2 text-indigo-600 font-medium">
-                <span>{c.cta}</span>
-                <span>→</span>
-              </div>
-            </a>
+            <Grid key={c.title} item xs={12} md={4}>
+              <Card
+                component="a"
+                href={c.anchor}
+                sx={{ textDecoration: "none" }}
+              >
+                <CardContent>
+                  <Typography fontWeight={600}>{c.title}</Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
+                    {c.desc}
+                  </Typography>
+                  <Button size="small" sx={{ mt: 1.5 }}>
+                    {c.cta}
+                  </Button>
+                </CardContent>
+              </Card>
+            </Grid>
           ))}
-        </section>
+        </Grid>
 
         {/* Progress & Reports */}
-        <section id="reports" className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Weekly Progress</h3>
-            <p className="text-sm text-gray-500">Sessions this week</p>
-            <div className="mt-4 h-24 rounded bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700">
-              <span className="text-2xl font-bold">3/3</span>
-            </div>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Pronunciation Score</h3>
-            <p className="text-sm text-gray-500">Avg. last 5 sessions</p>
-            <div className="mt-4 h-24 rounded bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center text-emerald-700">
-              <span className="text-2xl font-bold">
-                {pron.loading
-                  ? "…"
-                  : pron.average != null
-                  ? Math.round(pron.average)
-                  : "-"}
-              </span>
-            </div>
-            <div className="mt-2 text-xs text-gray-500">
-              {pron.count} sessions
-            </div>
-            <button
-              onClick={async () => {
-                // Demo: log a random sample score 70-95
-                try {
-                  let headers = { "Content-Type": "application/json" };
-                  try {
-                    const t = localStorage.getItem("aesp_token");
-                    if (t)
-                      headers = { ...headers, Authorization: `Bearer ${t}` };
-                  } catch {}
-                  const sample = Math.round(70 + Math.random() * 25);
-                  await fetch("/api/learners/metrics/pronunciation", {
-                    method: "POST",
-                    credentials: "include",
-                    headers,
-                    body: JSON.stringify({ score: sample }),
-                  });
-                  // Refresh
-                  const res = await fetch(
-                    "/api/learners/metrics/pronunciation/avg?count=5",
-                    {
-                      credentials: "include",
-                      headers: {
-                        Accept: "application/json",
-                        ...(headers.Authorization
-                          ? { Authorization: headers.Authorization }
-                          : {}),
-                      },
-                    }
-                  );
-                  if (res.ok) {
-                    const data = await res.json();
-                    setPron({
-                      average: data.average,
-                      count: data.count,
-                      loading: false,
-                    });
-                  }
-                } catch {}
-              }}
-              className="mt-3 px-3 py-1.5 rounded border text-sm hover:bg-gray-50"
-            >
-              Log sample score
-            </button>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Vocabulary Growth</h3>
-            <p className="text-sm text-gray-500">New words learned</p>
-            <div className="mt-4 h-24 rounded bg-gradient-to-br from-amber-100 to-yellow-100 flex items-center justify-center text-amber-700">
-              <span className="text-2xl font-bold">+24</span>
-            </div>
-          </div>
-        </section>
+        <Grid id="reports" container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  Weekly Progress
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Sessions this week
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 2,
+                    height: 96,
+                    borderRadius: 1,
+                    bgcolor: "#EEF2FF",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#4338CA",
+                  }}
+                >
+                  <Typography variant="h5" fontWeight={700}>
+                    3/3
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  Pronunciation Score
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Avg. last 5 sessions
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 2,
+                    height: 96,
+                    borderRadius: 1,
+                    bgcolor: "#D1FAE5",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#065F46",
+                  }}
+                >
+                  <Typography variant="h5" fontWeight={700}>
+                    {pron.loading
+                      ? "…"
+                      : pron.average != null
+                      ? Math.round(pron.average)
+                      : "-"}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: "block" }}
+                >
+                  {pron.count} sessions
+                </Typography>
+                <Button
+                  size="small"
+                  sx={{ mt: 1.5 }}
+                  onClick={async () => {
+                    // Demo: log a random sample score 70-95
+                    try {
+                      let headers = { "Content-Type": "application/json" };
+                      try {
+                        const t = localStorage.getItem("aesp_token");
+                        if (t)
+                          headers = {
+                            ...headers,
+                            Authorization: `Bearer ${t}`,
+                          };
+                      } catch {}
+                      const sample = Math.round(70 + Math.random() * 25);
+                      await fetch("/api/learners/metrics/pronunciation", {
+                        method: "POST",
+                        credentials: "include",
+                        headers,
+                        body: JSON.stringify({ score: sample }),
+                      });
+                      // Refresh
+                      const res = await fetch(
+                        "/api/learners/metrics/pronunciation/avg?count=5",
+                        {
+                          credentials: "include",
+                          headers: {
+                            Accept: "application/json",
+                            ...(headers.Authorization
+                              ? { Authorization: headers.Authorization }
+                              : {}),
+                          },
+                        }
+                      );
+                      if (res.ok) {
+                        const data = await res.json();
+                        setPron({
+                          average: data.average,
+                          count: data.count,
+                          loading: false,
+                        });
+                      }
+                    } catch {}
+                  }}
+                >
+                  Log sample score
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  Vocabulary Growth
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  New words learned
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 2,
+                    height: 96,
+                    borderRadius: 1,
+                    bgcolor: "#FEF3C7",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#92400E",
+                  }}
+                >
+                  <Typography variant="h5" fontWeight={700}>
+                    +24
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
         {/* AI Section */}
-        <section id="ai" className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="md:col-span-2 rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">AI Conversation</h3>
-            <p className="text-sm text-gray-500">
-              Speak and get real-time feedback
-            </p>
-            <div className="mt-4 h-48 rounded bg-gray-100 flex items-center justify-center text-gray-500">
-              <span>Microphone + waveform placeholder</span>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500">
-                Start
-              </button>
-              <button className="px-4 py-2 rounded border hover:bg-gray-50">
-                Upload Audio
-              </button>
-            </div>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Corrections</h3>
-            <p className="text-sm text-gray-500">Grammar & vocabulary</p>
-            <ul className="mt-3 list-disc pl-5 text-sm text-gray-700 space-y-1">
-              <li>Use present perfect instead of past simple.</li>
-              <li>Pronounce "comfortable" as /ˈkʌmf.tə.bəl/.</li>
-              <li>Try synonyms for "good": excellent, effective, solid.</li>
-            </ul>
-          </div>
-        </section>
+        <Grid id="ai" container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  AI Conversation
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Speak and get real-time feedback
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 2,
+                    height: 192,
+                    borderRadius: 1,
+                    bgcolor: "grey.100",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "text.secondary",
+                  }}
+                >
+                  <Typography variant="body2">
+                    Microphone + waveform placeholder
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+                  <Button variant="contained">Start</Button>
+                  <Button variant="outlined">Upload Audio</Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  Corrections
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Grammar & vocabulary
+                </Typography>
+                <Box component="ul" sx={{ mt: 1.5, pl: 3 }}>
+                  <li>Use present perfect instead of past simple.</li>
+                  <li>Pronounce "comfortable" as /ˈkʌmf.tə.bəl/.</li>
+                  <li>Try synonyms for "good": excellent, effective, solid.</li>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
         {/* Community & Mentors */}
-        <section id="community" className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="md:col-span-2 rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Community Rooms</h3>
-            <p className="text-sm text-gray-500">
-              Practice with other learners
-            </p>
-            <div className="mt-3 grid sm:grid-cols-2 gap-3">
-              {[
-                "Travel Talk",
-                "Business Pitch",
-                "Daily Chat",
-                "IELTS Speaking",
-              ].map((r) => (
-                <div
-                  key={r}
-                  className="rounded-lg border p-3 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="font-medium">{r}</p>
-                    <p className="text-xs text-gray-500">
-                      6–10 participants · Active
-                    </p>
-                  </div>
-                  <button className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-500">
-                    Join
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Mentor Spotlight</h3>
-            <p className="text-sm text-gray-500">Top mentors this week</p>
-            <ul className="mt-3 space-y-2 text-sm">
-              {[
-                { name: "Hannah", specialty: "Pronunciation" },
-                { name: "Long", specialty: "Fluency" },
-                { name: "Chris", specialty: "Business English" },
-              ].map((m) => (
-                <li key={m.name} className="flex items-center justify-between">
-                  <span>
-                    {m.name} · {m.specialty}
-                  </span>
-                  <button className="px-3 py-1 rounded border text-gray-700 hover:bg-gray-50">
-                    View
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
+        <Grid id="community" container spacing={2} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={8}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  Community Rooms
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Practice with other learners
+                </Typography>
+                <Grid container spacing={1.5} sx={{ mt: 1 }}>
+                  {[
+                    "Travel Talk",
+                    "Business Pitch",
+                    "Daily Chat",
+                    "IELTS Speaking",
+                  ].map((r) => (
+                    <Grid key={r} item xs={12} sm={6}>
+                      <Card>
+                        <CardContent
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <div>
+                            <Typography fontWeight={600}>{r}</Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              6–10 participants · Active
+                            </Typography>
+                          </div>
+                          <Button size="small" variant="contained">
+                            Join
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent>
+                <Typography fontWeight={600} gutterBottom>
+                  Mentor Spotlight
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Top mentors this week
+                </Typography>
+                <Box component="ul" sx={{ mt: 1.5, pl: 2 }}>
+                  {[
+                    { name: "Hannah", specialty: "Pronunciation" },
+                    { name: "Long", specialty: "Fluency" },
+                    { name: "Chris", specialty: "Business English" },
+                  ].map((m) => (
+                    <Box
+                      key={m.name}
+                      component="li"
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        py: 0.5,
+                      }}
+                    >
+                      <span>
+                        {m.name} · {m.specialty}
+                      </span>
+                      <Button size="small" variant="outlined">
+                        View
+                      </Button>
+                    </Box>
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
         {/* Packages */}
-        <section className="mb-10">
-          <div className="rounded-xl border bg-white p-4">
-            <h3 className="font-semibold mb-1">Upgrade Your Learning</h3>
-            <p className="text-sm text-gray-500">
-              Choose a package that fits your goals
-            </p>
-            <div className="mt-4 grid sm:grid-cols-3 gap-3">
-              {[
-                {
-                  name: "Basic",
-                  price: "$0",
-                  features: ["AI practice", "Weekly report"],
-                },
-                {
-                  name: "Plus",
-                  price: "$9/mo",
-                  features: ["All Basic", "Mentor feedback", "Community rooms"],
-                },
-                {
-                  name: "Premium",
-                  price: "$19/mo",
-                  features: ["All Plus", "1:1 Mentor", "Advanced analytics"],
-                },
-              ].map((p) => (
-                <div key={p.name} className="rounded-lg border p-4">
-                  <p className="font-semibold">{p.name}</p>
-                  <p className="text-xl mt-1">{p.price}</p>
-                  <ul className="mt-2 text-sm text-gray-600 list-disc pl-5 space-y-1">
-                    {p.features.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
-                  <button className="mt-3 w-full px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-500">
-                    Choose
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        <Box sx={{ mb: 6 }}>
+          <Card>
+            <CardContent>
+              <Typography fontWeight={600} gutterBottom>
+                Upgrade Your Learning
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Choose a package that fits your goals
+              </Typography>
+              <Grid container spacing={1.5} sx={{ mt: 1 }}>
+                {[
+                  {
+                    name: "Basic",
+                    price: "$0",
+                    features: ["AI practice", "Weekly report"],
+                  },
+                  {
+                    name: "Plus",
+                    price: "$9/mo",
+                    features: [
+                      "All Basic",
+                      "Mentor feedback",
+                      "Community rooms",
+                    ],
+                  },
+                  {
+                    name: "Premium",
+                    price: "$19/mo",
+                    features: ["All Plus", "1:1 Mentor", "Advanced analytics"],
+                  },
+                ].map((p) => (
+                  <Grid key={p.name} item xs={12} sm={4}>
+                    <Card variant="outlined">
+                      <CardContent>
+                        <Typography fontWeight={600}>{p.name}</Typography>
+                        <Typography variant="h6" sx={{ mt: 0.5 }}>
+                          {p.price}
+                        </Typography>
+                        <Box component="ul" sx={{ mt: 1.5, pl: 2 }}>
+                          {p.features.map((f) => (
+                            <li key={f}>{f}</li>
+                          ))}
+                        </Box>
+                        <Button fullWidth variant="contained" sx={{ mt: 1.5 }}>
+                          Choose
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </CardContent>
+          </Card>
+        </Box>
       </main>
-    </div>
+    </Box>
   );
 }

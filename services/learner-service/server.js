@@ -1,5 +1,2 @@
-console.log(
-  "learner-service placeholder running on PORT",
-  process.env.PORT || 3000
-);
-setInterval(() => {}, 1 << 30);
+// Delegate to the real app in src/index.js so either `node src/index.js` or `node server.js` works.
+require("./src/index");
