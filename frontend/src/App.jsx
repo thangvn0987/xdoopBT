@@ -10,6 +10,7 @@ import Onboarding from "./onboarding/Onboarding";
 import AppShell from "./components/AppShell";
 import OnboardingGate from "./auth/OnboardingGate";
 import RoadmapPage from "./learning-path/RoadmapPage";
+import SubscriptionPage from "./plans/SubscriptionPage";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
       >
         <Route path="/" element={<HomePage />} />
         <Route path="/roadmap" element={<RoadmapPage />} />
+        <Route path="/plans" element={<SubscriptionPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/level-test" element={<LevelTest />} />
         <Route path="/onboarding" element={<Onboarding />} />

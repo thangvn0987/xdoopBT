@@ -47,6 +47,9 @@ export default function AppShell() {
             <Button color="inherit" component={RouterLink} to="/roadmap">
               Roadmap
             </Button>
+            <Button color="inherit" component={RouterLink} to="/plans">
+              Plans
+            </Button>
             <Button color="inherit" component={RouterLink} to="/level-test">
               Level Test
             </Button>
