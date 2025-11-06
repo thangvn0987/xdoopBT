@@ -30,7 +30,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - ./database/init:/migrations:ro
-    entrypoint: ["bash","-lc"]
+    entrypoint: ["bash", "-lc"]
     command: >-
       'set -e;
        echo "[db-migrator] Waiting for Postgres...";
