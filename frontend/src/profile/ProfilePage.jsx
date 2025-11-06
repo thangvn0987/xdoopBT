@@ -1,276 +1,303 @@
 import React from "react";
+import {
+  Container,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormGroup,
+  FormControlLabel,
+  Checkbox,
+  Button,
+  Stack,
+  Alert,
+} from "@mui/material";
 
 export default function ProfilePage() {
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
-  const [goals, setGoals] = React.useState("");
-  const [interests, setInterests] = React.useState([]);
-  const [interestInput, setInterestInput] = React.useState("");
-  const [message, setMessage] = React.useState("");
-  const [error, setError] = React.useState("");
-  // Keep a snapshot of what is saved on the server so we can
-  // show a nice preview and detect unsaved changes.
-  const [lastSaved, setLastSaved] = React.useState({
-    goals: "",
-    interests: [],
-  });
-  const [savedAt, setSavedAt] = React.useState(null);
+  const [error, setError] = React.useState(null);
 
-  const hasChanges = React.useMemo(() => {
-    const norm = (arr) => (Array.isArray(arr) ? arr : []).join("|#|");
-    return (
-      (goals ?? "").trim() !== (lastSaved.goals ?? "") ||
-      norm(interests) !== norm(lastSaved.interests)
-    );
-  }, [goals, interests, lastSaved]);
+  const [profile, setProfile] = React.useState({
+    display_name: "",
+    avatar: "",
+    short_bio: "",
+    current_level: "",
+    accent_preference: "",
+    email: "",
+    name: "",
+  });
+  const [prefs, setPrefs] = React.useState({
+    main_goal: "",
+    ai_voice: "",
+    favorite_topics: [],
+    daily_minutes: 15,
+    correction_strictness: "all",
+    notification_preferences: {},
+  });
+
+  const authHeaders = React.useCallback(() => {
+    let headers = { Accept: "application/json" };
+    try {
+      const t = localStorage.getItem("aesp_token");
+      if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
+    } catch {}
+    return headers;
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
-      setLoading(true);
       try {
-        let headers = { Accept: "application/json" };
-        try {
-          const t = localStorage.getItem("aesp_token");
-          if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
-        } catch {}
-        const res = await fetch("/api/learners/profiles/me", {
-          credentials: "include",
-          headers,
-        });
-        if (!cancelled && res.ok) {
-          const data = await res.json();
-          setGoals(data.goals || "");
-          setInterests(Array.isArray(data.interests) ? data.interests : []);
-          setLastSaved({
-            goals: data.goals || "",
-            interests: Array.isArray(data.interests) ? data.interests : [],
-          });
-          setSavedAt(new Date());
+        setLoading(true);
+        const [pr, pf] = await Promise.all([
+          fetch("/api/learners/profile", {
+            credentials: "include",
+            headers: authHeaders(),
+          }),
+          fetch("/api/learners/preferences", {
+            credentials: "include",
+            headers: authHeaders(),
+          }),
+        ]);
+        if (!cancelled) {
+          if (pr.ok) setProfile(await pr.json());
+          if (pf.ok) setPrefs(await pf.json());
+          setLoading(false);
         }
       } catch (e) {
-        if (!cancelled) setError("Failed to load profile");
-      } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setError(e.message || String(e));
+          setLoading(false);
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authHeaders]);
 
-  function addInterestFromInput() {
-    const parts = interestInput
-      .split(/[\s,\n]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (!parts.length) return;
-    const next = Array.from(new Set([...interests, ...parts])).slice(0, 30);
-    setInterests(next);
-    setInterestInput("");
-  }
+  const onChangeProfile = (k) => (e) =>
+    setProfile((p) => ({ ...p, [k]: e.target.value }));
+  const onChangePrefs = (k) => (e) =>
+    setPrefs((p) => ({ ...p, [k]: e.target.value }));
 
-  function removeInterest(i) {
-    setInterests((arr) => arr.filter((_, idx) => idx !== i));
-  }
+  const toggleTopic = (topic) => () => {
+    setPrefs((p) => {
+      const set = new Set(p.favorite_topics || []);
+      if (set.has(topic)) set.delete(topic);
+      else set.add(topic);
+      return { ...p, favorite_topics: Array.from(set) };
+    });
+  };
 
-  async function onSave() {
+  const saveAll = async () => {
     setSaving(true);
-    setMessage("");
-    setError("");
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    setError(null);
     try {
-      let headers = { "Content-Type": "application/json" };
-      try {
-        const t = localStorage.getItem("aesp_token");
-        if (t) headers = { ...headers, Authorization: `Bearer ${t}` };
-      } catch {}
-      const res = await fetch("/api/learners/profiles/me", {
+      await fetch("/api/learners/profile", {
         method: "PUT",
         credentials: "include",
-        headers,
-        body: JSON.stringify({ goals, interests }),
-        signal: controller.signal,
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          display_name: profile.display_name,
+          avatar_url: profile.avatar,
+          short_bio: profile.short_bio,
+          current_level: profile.current_level,
+          accent_preference: profile.accent_preference,
+        }),
       });
-      if (!res.ok) throw new Error("Save failed");
-      setMessage("Profile saved");
-      setLastSaved({
-        goals: (goals ?? "").trim(),
-        interests: interests.slice(0),
+      await fetch("/api/learners/preferences", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({
+          main_goal: prefs.main_goal || null,
+          ai_voice: prefs.ai_voice || null,
+          favorite_topics: prefs.favorite_topics || [],
+          daily_minutes: Number(prefs.daily_minutes) || 15,
+          correction_strictness: prefs.correction_strictness || "all",
+          notification_preferences: prefs.notification_preferences || {},
+        }),
       });
-      setSavedAt(new Date());
     } catch (e) {
-      if (e.name === "AbortError") {
-        setError("Save timed out. Please try again.");
-      } else {
-        setError(e.message || "Save failed");
-      }
+      setError(e.message || String(e));
     } finally {
-      clearTimeout(id);
       setSaving(false);
-      setTimeout(() => setMessage(""), 2000);
     }
-  }
+  };
+
+  if (loading) return <Container sx={{ py: 4 }}>Loading…</Container>;
+
+  const topicOptions = [
+    "Business",
+    "Tech",
+    "Travel",
+    "Movies & Culture",
+    "Daily Life",
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Learning Profile</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Tell us your goals and interests to get better topic suggestions.
-          </p>
-        </div>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Typography variant="h5" fontWeight={600} gutterBottom>
+        Your Profile
+      </Typography>
 
-        <div className="rounded-2xl border bg-white p-5 shadow-sm">
-          {loading ? (
-            <div className="text-gray-500">Loading…</div>
-          ) : (
-            <>
-              {/* Goals */}
-              <div>
-                <label className="block text-sm font-medium">Goals</label>
-                <textarea
-                  className="mt-1 w-full rounded-xl px-3 py-2 border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 min-h-[120px]"
-                  placeholder="e.g., Improve fluency for job interviews, reach IELTS Speaking 6.5, practice daily for 15 minutes"
-                  value={goals}
-                  onChange={(e) => setGoals(e.target.value)}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Profile
+              </Typography>
+              <Stack spacing={2}>
+                <TextField
+                  label="Display Name"
+                  value={profile.display_name || ""}
+                  onChange={onChangeProfile("display_name")}
+                  fullWidth
                 />
-              </div>
+                <TextField
+                  label="Avatar URL"
+                  value={profile.avatar || ""}
+                  onChange={onChangeProfile("avatar")}
+                  fullWidth
+                />
+                <TextField
+                  label="Short Bio"
+                  value={profile.short_bio || ""}
+                  onChange={onChangeProfile("short_bio")}
+                  fullWidth
+                  multiline
+                  minRows={3}
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Current Level"
+                      placeholder="A2 / B1 / …"
+                      value={profile.current_level || ""}
+                      onChange={onChangeProfile("current_level")}
+                      fullWidth
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Accent Pref"
+                      placeholder="en-US / en-GB"
+                      value={profile.accent_preference || ""}
+                      onChange={onChangeProfile("accent_preference")}
+                      fullWidth
+                    />
+                  </Grid>
+                </Grid>
+                <Typography variant="caption" color="text.secondary">
+                  Account: {profile.name || ""} · {profile.email || ""}
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
 
-              {/* Interests */}
-              <div className="mt-5">
-                <label className="block text-sm font-medium">Interests</label>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {interests.map((it, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-800 text-xs border border-indigo-100"
-                    >
-                      {it}
-                      <button
-                        onClick={() => removeInterest(i)}
-                        className="ml-1 text-indigo-600 hover:text-indigo-800"
-                        title="Remove"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-2 flex gap-2">
-                  <input
-                    className="flex-1 rounded-xl px-3 py-2 border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                    placeholder="Add interests (comma or Enter)"
-                    value={interestInput}
-                    onChange={(e) => setInterestInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") {
-                        e.preventDefault();
-                        addInterestFromInput();
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={addInterestFromInput}
-                    className="px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500"
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                Preferences
+              </Typography>
+              <Stack spacing={2}>
+                <FormControl fullWidth>
+                  <InputLabel>Main Goal</InputLabel>
+                  <Select
+                    label="Main Goal"
+                    value={prefs.main_goal || ""}
+                    onChange={onChangePrefs("main_goal")}
                   >
-                    Add
-                  </button>
+                    <MenuItem value="">Select…</MenuItem>
+                    <MenuItem value="WORK">Work / Interview</MenuItem>
+                    <MenuItem value="TRAVEL">Travel</MenuItem>
+                    <MenuItem value="EXAM">Exam (IELTS/TOEIC)</MenuItem>
+                    <MenuItem value="CONVERSATION">Daily Conversation</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel>AI Voice</InputLabel>
+                  <Select
+                    label="AI Voice"
+                    value={prefs.ai_voice || ""}
+                    onChange={onChangePrefs("ai_voice")}
+                  >
+                    <MenuItem value="">Select…</MenuItem>
+                    <MenuItem value="en-US-male">Male (US)</MenuItem>
+                    <MenuItem value="en-US-female">Female (US)</MenuItem>
+                    <MenuItem value="en-GB-female">Female (UK)</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth>
+                  <InputLabel>Daily Minutes</InputLabel>
+                  <Select
+                    label="Daily Minutes"
+                    value={String(prefs.daily_minutes ?? 15)}
+                    onChange={(e) =>
+                      setPrefs((p) => ({
+                        ...p,
+                        daily_minutes: Number(e.target.value),
+                      }))
+                    }
+                  >
+                    <MenuItem value="5">5</MenuItem>
+                    <MenuItem value="15">15</MenuItem>
+                    <MenuItem value="30">30</MenuItem>
+                  </Select>
+                </FormControl>
+                <div>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
+                    Topics
+                  </Typography>
+                  <FormGroup>
+                    {topicOptions.map((t) => (
+                      <FormControlLabel
+                        key={t}
+                        control={
+                          <Checkbox
+                            checked={(prefs.favorite_topics || []).includes(t)}
+                            onChange={toggleTopic(t)}
+                          />
+                        }
+                        label={t}
+                      />
+                    ))}
+                  </FormGroup>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Examples: Travel, Business English, Technology, Movies, IELTS
-                </p>
-              </div>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-              {/* Actions */}
-              <div className="mt-6 flex items-center gap-3">
-                <button
-                  onClick={onSave}
-                  disabled={saving || !hasChanges}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
-                >
-                  {saving ? "Saving…" : "Save Profile"}
-                </button>
-                {hasChanges && !saving && (
-                  <span className="text-sm text-amber-600 fade-in-up">
-                    Unsaved changes
-                  </span>
-                )}
-                {message && (
-                  <span className="text-sm text-emerald-600 fade-in-up">
-                    {message}
-                  </span>
-                )}
-                {error && (
-                  <span className="text-sm text-red-600 fade-in-up">
-                    {error}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-        {/* Saved preview & tips */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm fade-in-up">
-            <h2 className="text-lg font-semibold">Profile Summary</h2>
-            <p className="text-xs text-gray-500 mt-1">
-              This is what’s currently saved. It updates right after you save.
-            </p>
-            <div className="mt-4">
-              <div className="text-sm font-medium text-gray-700">Goals</div>
-              <div className="mt-1 whitespace-pre-line text-gray-800 bg-indigo-50/30 rounded-lg p-3">
-                {lastSaved.goals ? (
-                  lastSaved.goals
-                ) : (
-                  <span className="text-gray-400">No goals yet</span>
-                )}
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="text-sm font-medium text-gray-700">Interests</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {lastSaved.interests?.length ? (
-                  lastSaved.interests.map((it, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-800 text-xs border border-indigo-100"
-                    >
-                      {it}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-400">No interests yet</span>
-                )}
-              </div>
-            </div>
-            <div className="mt-4 text-xs text-gray-500">
-              {savedAt
-                ? `Last saved: ${new Date(savedAt).toLocaleString()}`
-                : "Not saved yet"}
-            </div>
-          </div>
-
-          {/* Tip card */}
-          <div className="rounded-2xl border bg-gradient-to-br from-white to-indigo-50 p-5 shadow-sm slide-in-right">
-            <h2 className="text-lg font-semibold">Tips</h2>
-            <ul className="mt-2 list-disc pl-5 text-sm text-gray-600 space-y-1">
-              <li>
-                Write specific, measurable goals for better AI suggestions.
-              </li>
-              <li>Use 5–10 interests to diversify practice topics.</li>
-              <li>Changes are saved securely to your profile.</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-6 text-sm text-gray-500">
-          Your profile helps us suggest better topics in Level Test and AI
-          Conversation.
-        </div>
-      </div>
-    </div>
+      <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+        <Button onClick={saveAll} disabled={saving} variant="contained">
+          {saving ? "Saving…" : "Save Changes"}
+        </Button>
+        <Button href="/level-test" variant="outlined">
+          Start Level Test
+        </Button>
+      </Stack>
+    </Container>
   );
 }

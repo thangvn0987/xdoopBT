@@ -1,4 +1,19 @@
 import React from "react";
+import {
+  Container,
+  Grid,
+  Card,
+  CardContent,
+  Typography,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Button,
+  Stack,
+  Box,
+} from "@mui/material";
 
 export default function LevelTest() {
   const [recording, setRecording] = React.useState(false);
@@ -317,309 +332,395 @@ export default function LevelTest() {
   }, [seconds]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-gray-900 level-test-container">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">AI Level Test</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Speak for ~45–60 seconds. We'll transcribe and analyze your
-              grammar, vocabulary, and fluency.
-            </p>
-          </div>
-          <div className="text-sm text-gray-500 hidden sm:block">
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Grid container justifyContent="space-between" alignItems="center">
+        <Grid item>
+          <Typography variant="h5" fontWeight={700}>
+            AI Level Test
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Speak for ~45–60 seconds. We'll transcribe and analyze your grammar,
+            vocabulary, and fluency.
+          </Typography>
+        </Grid>
+        <Grid item sx={{ display: { xs: "none", sm: "block" } }}>
+          <Typography variant="caption" color="text.secondary">
             {recording ? "Recording…" : analyzing ? "Analyzing…" : "Ready"}
-          </div>
-        </div>
+          </Typography>
+        </Grid>
+      </Grid>
 
-        <div className="mt-6 grid md:grid-cols-2 gap-6">
-          {/* Left: Controls */}
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-800">
-                  Suggested topic
-                </label>
-                <input
-                  className="mt-1 w-full rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200 bg-white text-slate-900 placeholder-slate-500 border border-slate-300 shadow-inner"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Describe your last trip to the countryside."
-                />
-              </div>
-              <div className="min-w-[200px]">
-                <label className="block text-sm font-medium text-slate-800">
-                  Category
-                </label>
-                <select
-                  className="mt-1 w-full rounded-xl px-3 py-2 bg-white text-slate-900 border border-slate-300 shadow-inner focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                >
-                  {Object.keys(TOPIC_PRESETS).map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+      <Grid container spacing={3} sx={{ mt: 1 }}>
+        {/* Left: Controls */}
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Grid container spacing={2} alignItems="flex-end">
+                <Grid item xs={12} sm>
+                  <TextField
+                    fullWidth
+                    label="Suggested topic"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="Describe your last trip to the countryside."
+                  />
+                </Grid>
+                <Grid item xs={12} sm={5}>
+                  <FormControl fullWidth>
+                    <InputLabel>Category</InputLabel>
+                    <Select
+                      label="Category"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    >
+                      {Object.keys(TOPIC_PRESETS).map((c) => (
+                        <MenuItem key={c} value={c}>
+                          {c}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              </Grid>
 
-            {/* Script controls */}
-            <div className="mt-3 grid sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-sm font-medium">Sentences</label>
-                <select
-                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
-                  value={sentenceCount}
-                  onChange={(e) =>
-                    setSentenceCount(parseInt(e.target.value, 10))
-                  }
+              {/* Script controls */}
+              <Grid container spacing={2} sx={{ mt: 1 }}>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Sentences</InputLabel>
+                    <Select
+                      label="Sentences"
+                      value={sentenceCount}
+                      onChange={(e) =>
+                        setSentenceCount(parseInt(e.target.value, 10))
+                      }
+                    >
+                      {[3, 5, 7, 10].map((n) => (
+                        <MenuItem key={n} value={n}>
+                          {n}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Length</InputLabel>
+                    <Select
+                      label="Length"
+                      value={lengthHint}
+                      onChange={(e) => setLengthHint(e.target.value)}
+                    >
+                      <MenuItem value="short">Short</MenuItem>
+                      <MenuItem value="medium">Medium</MenuItem>
+                      <MenuItem value="long">Long</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid
+                  item
+                  xs={12}
+                  sm={4}
+                  sx={{ display: "flex", alignItems: "end" }}
                 >
-                  {[3, 5, 7, 10].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Length</label>
-                <select
-                  className="mt-1 w-full border rounded-xl px-3 py-2 bg-white"
-                  value={lengthHint}
-                  onChange={(e) => setLengthHint(e.target.value)}
-                >
-                  <option value="short">Short</option>
-                  <option value="medium">Medium</option>
-                  <option value="long">Long</option>
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button
-                  onClick={generateScript}
-                  disabled={generating}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
-                >
-                  {generating ? "Generating..." : "Generate Script"}
-                </button>
-              </div>
-            </div>
-
-            <div
-              className="mt-3 flex flex-wrap gap-2"
-              aria-label="Topic suggestions"
-            >
-              {suggestions.map((s) => {
-                const selected = topic === s;
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setTopic(s)}
-                    aria-pressed={selected}
-                    title={s}
-                    className={[
-                      "px-3 py-1.5 rounded-full text-xs transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300",
-                      selected
-                        ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5"
-                        : "bg-white text-slate-800 border border-slate-200 hover:bg-slate-50 hover:shadow-sm",
-                    ].join(" ")}
+                  <Button
+                    onClick={generateScript}
+                    disabled={generating}
+                    fullWidth
+                    variant="contained"
+                    color="success"
                   >
-                    {s}
-                  </button>
-                );
-              })}
-              <button
-                onClick={pickRandomTopic}
-                className="px-3 py-1.5 rounded-full text-xs bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 hover:shadow-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 inline-flex items-center gap-1"
-                title="Pick a random topic"
+                    {generating ? "Generating..." : "Generate Script"}
+                  </Button>
+                </Grid>
+              </Grid>
+
+              <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ mt: 1 }}
+                aria-label="Topic suggestions"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-4 h-4"
+                {suggestions.map((s) => {
+                  const selected = topic === s;
+                  return (
+                    <Button
+                      key={s}
+                      size="small"
+                      variant={selected ? "contained" : "outlined"}
+                      onClick={() => setTopic(s)}
+                    >
+                      {s}
+                    </Button>
+                  );
+                })}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={pickRandomTopic}
                 >
-                  <path d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25H6.75a2.25 2.25 0 0 1-2.25-2.25V6.75Zm6.75-.75a.75.75 0 0 0 0 1.5h5.25a.75.75 0 0 0 0-1.5H11.25ZM7.5 9.75A1.5 1.5 0 1 0 7.5 12a1.5 1.5 0 0 0 0-2.25Zm3.75 6A1.5 1.5 0 1 0 12.75 18a1.5 1.5 0 0 0 0-2.25Zm-4.5 1.5a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" />
-                </svg>
-                Randomize
-              </button>
-            </div>
+                  Randomize
+                </Button>
+              </Stack>
 
-            <div className="mt-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span
-                  className={`inline-flex h-2.5 w-2.5 rounded-full ${
-                    recording
-                      ? "bg-red-500 animate-pulse"
-                      : analyzing
-                      ? "bg-amber-500 animate-pulse"
-                      : "bg-emerald-500"
-                  }`}
-                />
-                <span className="text-sm text-gray-600">
-                  {recording
-                    ? "Recording"
-                    : analyzing
-                    ? "Analyzing"
-                    : generating
-                    ? "Preparing script"
-                    : "Idle"}
-                </span>
-              </div>
-              <div className="text-sm font-mono tabular-nums text-gray-700">
-                {mmss}
-              </div>
-            </div>
-
-            {/* Live waveform */}
-            <div className="mt-5 h-28 rounded-xl bg-slate-50 border flex items-end gap-1 p-3 overflow-hidden">
-              {bars.map((h, i) => (
-                <div
-                  key={i}
-                  className="live-bar w-1 bg-indigo-500/70"
-                  style={{ height: `${h}%` }}
-                />
-              ))}
-            </div>
-
-            {/* Script area */}
-            <div className="mt-5">
-              <label className="block text-sm font-medium">
-                Script to read
-              </label>
-              <textarea
-                className="mt-1 w-full min-h-[100px] border rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                placeholder="Click Generate Script or paste your own text here..."
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                This text will be used as reference for pronunciation
-                assessment.
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              {!recording ? (
-                <button
-                  onClick={start}
-                  disabled={analyzing}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path d="M8.25 5.75a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1 0 1.06l-6 6a.75.75 0 0 1-1.06-1.06L13.94 12 8.25 6.81a.75.75 0 0 1 0-1.06Z" />
-                  </svg>
-                  Start Recording
-                </button>
-              ) : (
-                <button
-                  onClick={stop}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-500"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path d="M6.75 5.25a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75h-9a.75.75 0 0 1-.75-.75V5.25Z" />
-                  </svg>
-                  Stop & Analyze
-                </button>
-              )}
-              <span className="text-xs text-gray-500">
-                Tip: Aim for 45–60s speaking time.
-              </span>
-            </div>
-          </div>
-
-          {/* Right: Results */}
-          <div className="rounded-2xl border bg-white p-5 shadow-sm relative">
-            {analyzing && (
-              <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center rounded-2xl z-10">
-                <div className="spinner" />
-              </div>
-            )}
-
-            {!result ? (
-              <div className="h-full min-h-[280px] flex items-center justify-center text-center text-gray-500 p-6">
-                Your result will appear here after analysis.
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {/* Score Gauge */}
-                <div className="flex items-center gap-4">
-                  <div
-                    className="relative w-28 h-28 rounded-full grid place-items-center"
-                    style={{
-                      background: `conic-gradient(#4f46e5 ${
-                        (result.pronScore || 0) * 3.6
-                      }deg, #e5e7eb 0deg)`,
+              <Grid
+                container
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mt: 2 }}
+              >
+                <Grid item>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        bgcolor: recording
+                          ? "error.main"
+                          : analyzing
+                          ? "warning.main"
+                          : "success.main",
+                      }}
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      {recording
+                        ? "Recording"
+                        : analyzing
+                        ? "Analyzing"
+                        : generating
+                        ? "Preparing script"
+                        : "Idle"}
+                    </Typography>
+                  </Stack>
+                </Grid>
+                <Grid item>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontFamily:
+                        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                     }}
                   >
-                    <div className="absolute inset-2 rounded-full bg-white grid place-items-center">
-                      <div className="text-2xl font-bold text-indigo-700">
-                        {Math.round(result.pronScore ?? 0)}
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500">
-                      Overall Pronunciation
-                    </div>
-                    <div className="text-lg font-semibold">
-                      Reference topic: {topic}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Higher is better (0–100)
-                    </div>
-                  </div>
-                </div>
-                {/* Sub-scores */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="rounded-xl border p-4 space-y-2">
-                    <div className="text-sm font-medium">Sub-scores</div>
-                    <div className="text-sm text-gray-700">
-                      Accuracy: {result.accuracyScore ?? "-"}
-                    </div>
-                    <div className="text-sm text-gray-700">
-                      Fluency: {result.fluencyScore ?? "-"}
-                    </div>
-                    <div className="text-sm text-gray-700">
-                      Completeness: {result.completenessScore ?? "-"}
-                    </div>
-                    <div className="text-sm text-gray-700">
-                      Prosody: {result.prosodyScore ?? "-"}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border p-4">
-                    <div className="text-sm font-medium">Tips</div>
-                    <div className="mt-2 text-sm text-gray-500">
-                      Improve by speaking clearly, maintaining steady pace, and
-                      finishing sentences.
-                    </div>
-                  </div>
-                </div>
+                    {mmss}
+                  </Typography>
+                </Grid>
+              </Grid>
 
-                {/* Transcript */}
-                <div className="rounded-xl border p-4">
-                  <div className="text-sm font-medium">Recognized Text</div>
-                  <div className="mt-2 text-sm text-gray-700 whitespace-pre-wrap">
-                    {result.text || "(empty)"}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+              {/* Live waveform */}
+              <Box
+                sx={{
+                  mt: 2,
+                  height: 112,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  gap: 0.5,
+                  p: 1.5,
+                  overflow: "hidden",
+                }}
+              >
+                {bars.map((h, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      width: 4,
+                      bgcolor: "primary.main",
+                      opacity: 0.7,
+                      height: `${h}%`,
+                    }}
+                  />
+                ))}
+              </Box>
+
+              {/* Script area */}
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  label="Script to read"
+                  placeholder="Click Generate Script or paste your own text here..."
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={4}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mt: 0.5 }}
+                >
+                  This text will be used as reference for pronunciation
+                  assessment.
+                </Typography>
+              </Box>
+
+              <Stack
+                direction="row"
+                alignItems="center"
+                spacing={2}
+                sx={{ mt: 2 }}
+              >
+                {!recording ? (
+                  <Button
+                    onClick={start}
+                    disabled={analyzing}
+                    variant="contained"
+                  >
+                    Start Recording
+                  </Button>
+                ) : (
+                  <Button onClick={stop} color="error" variant="contained">
+                    Stop & Analyze
+                  </Button>
+                )}
+                <Typography variant="caption" color="text.secondary">
+                  Tip: Aim for 45–60s speaking time.
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Right: Results */}
+        <Grid item xs={12} md={6}>
+          <Card sx={{ position: "relative" }}>
+            <CardContent>
+              {analyzing && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    bgcolor: "rgba(255,255,255,0.7)",
+                    backdropFilter: "blur(2px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 2,
+                    zIndex: 10,
+                  }}
+                >
+                  <div className="spinner" />
+                </Box>
+              )}
+
+              {!result ? (
+                <Box
+                  sx={{
+                    minHeight: 280,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    color: "text.secondary",
+                    p: 2,
+                  }}
+                >
+                  Your result will appear here after analysis.
+                </Box>
+              ) : (
+                <Stack spacing={2.5}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Box
+                      sx={{
+                        position: "relative",
+                        width: 112,
+                        height: 112,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: `conic-gradient(#4f46e5 ${
+                          (result.pronScore || 0) * 3.6
+                        }deg, #e5e7eb 0deg)`,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          inset: 8,
+                          borderRadius: "50%",
+                          bgcolor: "background.paper",
+                          display: "grid",
+                          placeItems: "center",
+                        }}
+                      >
+                        <Typography variant="h6" color="primary">
+                          {Math.round(result.pronScore ?? 0)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Overall Pronunciation
+                      </Typography>
+                      <Typography fontWeight={600}>
+                        Reference topic: {topic}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Higher is better (0–100)
+                      </Typography>
+                    </Box>
+                  </Stack>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="body2" fontWeight={600}>
+                            Sub-scores
+                          </Typography>
+                          <Typography variant="body2">
+                            Accuracy: {result.accuracyScore ?? "-"}
+                          </Typography>
+                          <Typography variant="body2">
+                            Fluency: {result.fluencyScore ?? "-"}
+                          </Typography>
+                          <Typography variant="body2">
+                            Completeness: {result.completenessScore ?? "-"}
+                          </Typography>
+                          <Typography variant="body2">
+                            Prosody: {result.prosodyScore ?? "-"}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="body2" fontWeight={600}>
+                            Tips
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Improve by speaking clearly, maintaining steady
+                            pace, and finishing sentences.
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="body2" fontWeight={600}>
+                        Recognized Text
+                      </Typography>
+                      <Typography
+                        sx={{ whiteSpace: "pre-wrap", mt: 1 }}
+                        variant="body2"
+                      >
+                        {result.text || "(empty)"}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Container>
   );
 }

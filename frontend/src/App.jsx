@@ -6,45 +6,33 @@ import RequireAuth from "./auth/RequireAuth";
 import AuthCallback from "./auth/AuthCallback";
 import LevelTest from "./level/LevelTest";
 import ProfilePage from "./profile/ProfilePage";
-import SubscriptionPage from "./plans/SubscriptionPage";
+import Onboarding from "./onboarding/Onboarding";
+import AppShell from "./components/AppShell";
+import OnboardingGate from "./auth/OnboardingGate";
+import RoadmapPage from "./learning-path/RoadmapPage";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
+
+      {/* Protected routes inside AppShell and onboarding gate */}
       <Route
-        path="/level-test"
         element={
           <RequireAuth>
-            <LevelTest />
+            <OnboardingGate>
+              <AppShell />
+            </OnboardingGate>
           </RequireAuth>
         }
-      />
-      <Route
-        path="/profile"
-        element={
-          <RequireAuth>
-            <ProfilePage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/plans"
-        element={
-          <RequireAuth>
-            <SubscriptionPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <HomePage />
-          </RequireAuth>
-        }
-      />
+      >
+        <Route path="/" element={<HomePage />} />
+        <Route path="/roadmap" element={<RoadmapPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/level-test" element={<LevelTest />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

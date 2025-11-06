@@ -1,20 +1,14 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const { createProxyMiddleware } = require("http-proxy-middleware");
+const buildCors = require("./config/cors");
+const createAiProxy = require("./proxy/ai");
+const createPronunciationProxy = require("./proxy/pronunciation");
 
 const app = express();
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
-// Important: Do NOT parse request bodies before proxying.
-// Body parsers consume the stream, causing proxied PUT/POST with JSON bodies
-// to arrive empty at target services and hang (leading to client timeouts).
-// Each downstream service handles its own body parsing.
-// app.use(express.json());
+// Centralized CORS with allowlist via CORS_ORIGIN env
+app.use(buildCors());
+// Do NOT parse bodies here; we proxy raw requests to backend services.
 
 const GATEWAY_PORT = Number(process.env.GATEWAY_PORT) || 8080;
 const services = {
@@ -47,6 +41,15 @@ app.use(
     pathRewrite: { "^/api/learners": "" },
   })
 );
+// Learning Path API v1 -> learner-service (extended there)
+app.use(
+  "/api/v1/learning-path",
+  createProxyMiddleware({
+    target: services.learner,
+    changeOrigin: true,
+    pathRewrite: { "^/api/v1/learning-path": "/learning-path" },
+  })
+);
 app.use(
   "/api/mentor",
   createProxyMiddleware({
@@ -55,65 +58,9 @@ app.use(
     pathRewrite: { "^/api/mentor": "" },
   })
 );
-app.use(
-  "/api/ai",
-  createProxyMiddleware({
-    target: services.ai,
-    changeOrigin: true,
-    pathRewrite: { "^/api/ai": "" },
-    proxyTimeout: 120000, // 2 minutes timeout for AI processing
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(
-        `[${new Date().toISOString()}] Proxying request from ${
-          req.originalUrl
-        } to ${services.ai}${proxyReq.path}`
-      );
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      console.log(
-        `[${new Date().toISOString()}] Received response from ${services.ai}${
-          req.originalUrl
-        } - Status: ${proxyRes.statusCode}`
-      );
-    },
-    onError: (err, req, res) => {
-      console.error("Proxy error to ai-service:", err);
-      res.writeHead(500, {
-        "Content-Type": "application/json",
-      });
-      res.end(JSON.stringify({ message: "Proxy error", error: err.message }));
-    },
-  })
-);
+app.use("/api/ai", createAiProxy(services.ai));
 
-app.use(
-  "/api/pronunciation",
-  createProxyMiddleware({
-    target: services.pronunciation,
-    changeOrigin: true,
-    pathRewrite: { "^/api/pronunciation": "" },
-    proxyTimeout: 120000,
-    onProxyReq: (proxyReq, req) => {
-      console.log(
-        `[${new Date().toISOString()}] Proxying ${req.method} ${
-          req.originalUrl
-        } -> ${services.pronunciation}${proxyReq.path}`
-      );
-    },
-    onProxyRes: (proxyRes, req) => {
-      console.log(
-        `[${new Date().toISOString()}] Response from pronunciation service for ${
-          req.method
-        } ${req.originalUrl}: ${proxyRes.statusCode}`
-      );
-    },
-    onError: (err, req, res) => {
-      console.error("Proxy error to pronunciation-assessment:", err);
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ message: "Proxy error", error: err.message }));
-    },
-  })
-);
+app.use("/api/pronunciation", createPronunciationProxy(services.pronunciation));
 
 // Serve frontend (fallback proxy)
 app.use(
