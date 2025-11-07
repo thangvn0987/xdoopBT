@@ -31,6 +31,8 @@ app.use(
   })
 );
 app.use(express.json());
+// Serve generated / uploaded audio files (TTS output + user uploads transiently)
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 // Uploads setup
 const UPLOAD_DIR = path.join(__dirname, "uploads");
@@ -163,6 +165,54 @@ app.post("/assess", upload.single("audio"), async (req, res) => {
         fs.unlinkSync(tempFile);
       } catch (_) {}
     }
+  }
+});
+
+// POST /tts { text, voice }
+// Synthesizes text to an MP3 file using Azure Speech and returns { url }
+app.post("/tts", async (req, res) => {
+  try {
+    const { text, voice } = req.body || {};
+    if (!text || !String(text).trim()) {
+      return res.status(400).json({ error: "Missing text" });
+    }
+    const speechConfig = makeSpeechConfig();
+    // Map short voice codes to Azure neural voices
+    const VOICE_MAP = {
+      "en-US-male": "en-US-GuyNeural",
+      "en-US-female": "en-US-JennyNeural",
+      "en-GB-female": "en-GB-LibbyNeural",
+    };
+    const voiceName = VOICE_MAP[voice] || VOICE_MAP[process.env.DEFAULT_AI_VOICE] || "en-US-GuyNeural";
+    speechConfig.speechSynthesisVoiceName = voiceName;
+
+    const synthesizer = new sdk.SpeechSynthesizer(speechConfig);
+    const synthPromise = () =>
+      new Promise((resolve, reject) => {
+        synthesizer.speakTextAsync(
+          text,
+          result => {
+            if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+              resolve(result);
+            } else {
+              reject(new Error("Synthesis failed: " + result.reason));
+            }
+          },
+          err => reject(err)
+        );
+      });
+    const result = await synthPromise();
+    synthesizer.close();
+    const audioData = result.audioData;
+    if (!audioData || !audioData.length) {
+      return res.status(500).json({ error: "Empty audio data" });
+    }
+    const fileName = `tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
+    const filePath = path.join(UPLOAD_DIR, fileName);
+    fs.writeFileSync(filePath, Buffer.from(audioData));
+    res.json({ ok: true, url: `/api/pronunciation/uploads/${fileName}`, voice: voiceName });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

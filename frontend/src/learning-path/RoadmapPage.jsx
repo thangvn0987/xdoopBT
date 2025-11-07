@@ -9,14 +9,10 @@ import {
   Button,
   Stack,
   Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   CircularProgress,
   Alert,
 } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 
 function StatusChip({ status }) {
   const color =
@@ -30,13 +26,10 @@ function StatusChip({ status }) {
 }
 
 export default function RoadmapPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [items, setItems] = useState([]);
-  const [startOpen, setStartOpen] = useState(false);
-  const [startMsg, setStartMsg] = useState("");
-  const [pendingLesson, setPendingLesson] = useState(null);
-  const [score, setScore] = useState("");
   const unlockedCount = useMemo(
     () => items.filter((i) => i.status === "unlocked").length,
     [items]
@@ -94,23 +87,8 @@ export default function RoadmapPage() {
     loadRoadmap();
   }, []);
 
-  async function handleStartPractice(lesson) {
-    try {
-      setError("");
-      setPendingLesson(lesson);
-      const { resp, data } = await fetchWithFallback("/start-practice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ lesson_id: lesson.lesson_id }),
-      });
-      if (!resp.ok) throw new Error(data?.error || "Start practice failed");
-      setStartMsg(data.start_message || "");
-      setStartOpen(true);
-    } catch (e) {
-      setError(e.message);
-      setPendingLesson(null);
-    }
+  function handleStartPractice(lesson) {
+    navigate(`/lesson/${lesson.lesson_id}/chat`);
   }
 
   async function handleComplete() {
@@ -210,21 +188,10 @@ export default function RoadmapPage() {
                   <Button
                     size="small"
                     variant="contained"
-                    disabled={item.status !== "unlocked"}
+                    disabled={item.status === "locked"}
                     onClick={() => handleStartPractice(item)}
                   >
-                    Start
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={item.status !== "completed"}
-                    onClick={() => {
-                      // allow re-practice flow
-                      handleStartPractice(item);
-                    }}
-                  >
-                    Practice again
+                    {item.status === "completed" ? "Practice again" : "Start"}
                   </Button>
                 </CardActions>
               </Card>
@@ -233,35 +200,7 @@ export default function RoadmapPage() {
         </Grid>
       )}
 
-      <Dialog
-        open={startOpen}
-        onClose={() => setStartOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Practice kickoff</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ whiteSpace: "pre-wrap", mb: 2 }}>
-            {startMsg}
-          </Typography>
-          <TextField
-            label="Score (0-100)"
-            type="number"
-            fullWidth
-            size="small"
-            value={score}
-            onChange={(e) => setScore(e.target.value)}
-            inputProps={{ min: 0, max: 100 }}
-            helperText="Optional: set a score to mark as completed right away"
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setStartOpen(false)}>Close</Button>
-          <Button variant="contained" onClick={handleComplete}>
-            Mark complete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Modal removed: now redirects to chat lesson page */}
     </Box>
   );
 }
