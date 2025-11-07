@@ -1420,9 +1420,9 @@ app.post("/learning-path/sessions/:sessionId/learner-turn", requireAuth, async (
       similarity = cosineSimilarity(tokenize(text), tokenize(lastAi.text || ""));
     }
 
-    // Combine scores: pronScore primary (0-100), similarity (0-1)
-    const pron = Number(pa_scores?.pronScore ?? pa_scores?.pronunciationScore ?? 0) || 0;
-    const combined = Math.max(0, Math.min(100, Math.round(pron * (0.8 + 0.2 * similarity))));
+  // Combine scores: pronScore primary (0-100), similarity (0-1)
+  const pron = Number(pa_scores?.pronScore ?? pa_scores?.pronunciationScore ?? 0) || 0;
+  const combined = Math.max(0, Math.min(100, Math.round(pron * (0.8 + 0.2 * similarity))));
 
     // Store learner turn
     await pool.query(
@@ -1437,7 +1437,7 @@ app.post("/learning-path/sessions/:sessionId/learner-turn", requireAuth, async (
 
     // Next AI line or complete
     if (learnerCount >= target) {
-      return res.json({ done: true });
+      return res.json({ done: true, combined });
     }
 
     // Build short history for AI
@@ -1461,7 +1461,7 @@ app.post("/learning-path/sessions/:sessionId/learner-turn", requireAuth, async (
       learnerHint = await aiSuggestLearnerReply(aiText, sess.title, sess.difficulty_level);
     }
 
-    res.json({ ai: { text: aiText, tts_url: ttsUrl }, learner_hint: learnerHint });
+  res.json({ ai: { text: aiText, tts_url: ttsUrl }, learner_hint: learnerHint, combined });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

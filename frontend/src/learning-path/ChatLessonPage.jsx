@@ -95,10 +95,13 @@ export default function ChatLessonPage() {
   const [mode, setMode] = React.useState("scripted");
   const [starting, setStarting] = React.useState(false);
   const [session, setSession] = React.useState(null); // {id, mode, target_learner_turns}
-  const [messages, setMessages] = React.useState([]); // [{role,text,tts_url,learner_hint}]
+  const [messages, setMessages] = React.useState([]); // [{role,text,tts_url,learner_hint,combined}]
   const [recording, setRecording] = React.useState(false);
   const [mediaRecorder, setMediaRecorder] = React.useState(null);
   const audioRef = React.useRef(null);
+  const [processing, setProcessing] = React.useState(false);
+  const [finalScore, setFinalScore] = React.useState(null);
+  const [me, setMe] = React.useState(null); // {avatar, name, email}
 
   const authHeaders = React.useMemo(() => {
     let headers = { Accept: "application/json" };
@@ -108,6 +111,20 @@ export default function ChatLessonPage() {
     } catch {}
     return headers;
   }, []);
+
+  React.useEffect(() => {
+    let stop = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/learners/profile", { credentials: "include", headers: authHeaders });
+        if (res.ok) {
+          const data = await res.json();
+          if (!stop) setMe(data);
+        }
+      } catch {}
+    })();
+    return () => { stop = true; };
+  }, [authHeaders]);
 
   const startSession = async () => {
     setStarting(true);
@@ -161,6 +178,7 @@ export default function ChatLessonPage() {
 
   const submitTurn = async (webm) => {
     try {
+      setProcessing(true);
       const wav = await webmToWavBlob(webm, 16000);
       const fd = new FormData();
       fd.append("audio", wav, "turn.wav");
@@ -184,7 +202,7 @@ export default function ChatLessonPage() {
       const next = await lr.json();
       setMessages(prev => [
         ...prev,
-        { role: "learner", text: pa.text || "", score: pa.scores?.pronScore ?? null },
+        { role: "learner", text: pa.text || "", combined: next.combined ?? null, score: pa.scores?.pronScore ?? null },
         ...(next.done ? [] : [{ role: "ai", text: next.ai.text, tts_url: next.ai.tts_url, hint: next.learner_hint || null }])
       ]);
       if (next.done) {
@@ -192,14 +210,19 @@ export default function ChatLessonPage() {
           method: "POST", credentials: "include", headers: authHeaders
         });
         const doneData = doneRes.ok ? await doneRes.json() : { final_score: null };
-        alert(`Session completed. Final score: ${doneData.final_score ?? "-"}`);
-        // navigate back to roadmap after finish
-        navigate("/roadmap");
+        setFinalScore(doneData.final_score ?? null);
       }
     } catch (e) {
       alert(e.message || "Failed to submit turn");
+    } finally {
+      setProcessing(false);
     }
   };
+
+  const learnerTurns = React.useMemo(() => messages.filter(m => m.role === 'learner').length, [messages]);
+  const targetTurns = session?.target_learner_turns || 0;
+  const aiAvatar = null; // could map to a fixed image later
+  const userAvatar = me?.avatar || null;
 
   return (
     <Box>
@@ -232,23 +255,53 @@ export default function ChatLessonPage() {
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent>
-                <Stack spacing={2}>
-                  {messages.map((m, idx) => (
-                    <Stack key={idx} direction="row" spacing={2} alignItems="flex-start">
-                      <Avatar>{m.role === 'ai' ? 'AI' : 'U'}</Avatar>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{m.text}</Typography>
-                        {m.tts_url ? (
-                          <Button size="small" sx={{ mt: 0.5 }} onClick={() => play(m.tts_url)}>Play</Button>
-                        ) : null}
-                        {m.hint ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5 }}>
-                            Suggested reply: {m.hint}
-                          </Typography>
-                        ) : null}
-                      </Box>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Learner turns: {learnerTurns}/{targetTurns}
+                  </Typography>
+                  {processing && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CircularProgress size={16} />
+                      <Typography variant="caption" color="text.secondary">Processing...</Typography>
                     </Stack>
-                  ))}
+                  )}
+                </Stack>
+                <Stack spacing={2}>
+                  {messages.map((m, idx) => {
+                    const isAi = m.role === 'ai';
+                    return (
+                      <Stack key={idx} direction="row" spacing={1.5} alignItems="flex-start">
+                        <Avatar src={isAi ? aiAvatar : userAvatar}>
+                          {isAi ? 'AI' : (me?.display_name?.[0] || me?.email?.[0] || 'U').toUpperCase()}
+                        </Avatar>
+                        <Box sx={{ flex: 1 }}>
+                          <Box sx={{
+                            display: 'inline-block',
+                            bgcolor: isAi ? 'grey.100' : 'primary.50',
+                            border: '1px solid',
+                            borderColor: isAi ? 'grey.200' : 'primary.100',
+                            px: 1.25, py: 1, borderRadius: 2,
+                            maxWidth: '100%'
+                          }}>
+                            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap"' }}>{m.text}</Typography>
+                          </Box>
+                          {m.tts_url ? (
+                            <Button size="small" sx={{ mt: 0.5 }} onClick={() => play(m.tts_url)}>Play</Button>
+                          ) : null}
+                          {m.hint ? (
+                            <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5 }}>
+                              Suggested reply: {m.hint}
+                            </Typography>
+                          ) : null}
+                          {m.combined != null && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5 }}>
+                              Turn score: {Math.round(m.combined)}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Stack>
+                    );
+                  })}
                 </Stack>
               </CardContent>
             </Card>
@@ -261,14 +314,24 @@ export default function ChatLessonPage() {
                 </Typography>
                 <Stack direction="row" spacing={2}>
                   {!recording ? (
-                    <Button variant="contained" onClick={startRec}>Record</Button>
+                    <Button variant="contained" onClick={startRec} disabled={processing}>Record</Button>
                   ) : (
-                    <Button color="error" variant="contained" onClick={stopRec}>Stop</Button>
+                    <Button color="error" variant="contained" onClick={stopRec}>Stop & Send</Button>
                   )}
                 </Stack>
                 <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 1 }}>
                   We don't store your audio; it is processed transiently for scoring only.
                 </Typography>
+
+                {finalScore != null && (
+                  <Box sx={{ mt: 2, p: 2, border: '1px solid', borderColor: 'success.light', borderRadius: 2, bgcolor: 'success.50' }}>
+                    <Typography variant="subtitle2">Session completed</Typography>
+                    <Typography variant="body2" color="text.secondary">Final score: {Math.round(finalScore)}</Typography>
+                    <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
+                      <Button size="small" variant="contained" onClick={() => navigate('/roadmap')}>Back to Roadmap</Button>
+                    </Stack>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>
