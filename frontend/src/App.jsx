@@ -31,7 +31,7 @@ export default function App() {
       >
         <Route path="/" element={<HomePage />} />
         <Route path="/roadmap" element={<RoadmapPage />} />
-  <Route path="/lesson/:lessonId/chat" element={<ChatLessonPage />} />
+        <Route path="/lesson/:lessonId/chat" element={<ChatLessonPage />} />
         <Route path="/plans" element={<SubscriptionPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/level-test" element={<LevelTest />} />

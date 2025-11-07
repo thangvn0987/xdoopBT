@@ -37,8 +37,8 @@ services:
        until pg_isready -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; do sleep 1; done;
        echo "[db-migrator] Applying SQL migrations from /migrations";
        for f in $(ls -1 /migrations/*.sql 2>/dev/null | sort); do
-         echo "[db-migrator] -> $f";
-         PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$f";
+         echo "[db-migrator] -> $$f";
+         PGPASSWORD="$POSTGRES_PASSWORD" psql -v ON_ERROR_STOP=1 -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "$$f";
        done;
        echo "[db-migrator] Done."'
     networks:
@@ -73,6 +73,9 @@ services:
       NODE_ENV: ${NODE_ENV}
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_MODEL_CHAT: ${OPENAI_MODEL_CHAT}
     depends_on:
       - postgres
       - db-migrator

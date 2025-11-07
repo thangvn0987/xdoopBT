@@ -26,11 +26,20 @@ const OPENAI_MODEL_CHAT =
   process.env.OPENAI_MODEL_CHAT || process.env.OPENAI_MODEL || "gpt-4o-mini";
 const AI_INTERNAL_BASE =
   process.env.AI_INTERNAL_BASE || "http://ai-service:3000";
-const PRONUNCIATION_INTERNAL = process.env.PRONUNCIATION_INTERNAL || "http://pronunciation-assessment:8085";
+const PRONUNCIATION_INTERNAL =
+  process.env.PRONUNCIATION_INTERNAL || "http://pronunciation-assessment:8085";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
   .split(/[;,]/)
   .map((s) => s.trim())
   .filter(Boolean);
+
+// Helper: build OpenAI-compatible API root, tolerant if base already ends with /v1
+function getOpenAIChatCompletionsUrl() {
+  if (!OPENAI_BASE_URL) return null;
+  const base = OPENAI_BASE_URL.replace(/\/$/, "");
+  const apiRoot = base.endsWith("/v1") ? base : `${base}/v1`;
+  return `${apiRoot}/chat/completions`;
+}
 
 // --- Database ---
 const pool = new Pool({ connectionString: DATABASE_URL });
@@ -89,19 +98,23 @@ async function ensureSubscriptionsSchema() {
   `
     )
     .catch(() => {});
-  // Drop old primary key on user_id if exists, then set pk on id
+  // If primary key already exists we leave it; avoid dropping due to dependent FKs (payments.subscription_id_fkey)
+  // Ensure id column is uniquely constrained so FKs referencing subscriptions(id) remain valid even if PK is still on user_id.
   await pool
     .query(
-      `DO $$ BEGIN
+      `DO $$
+      DECLARE pkcols int;
       BEGIN
-        ALTER TABLE subscriptions DROP CONSTRAINT subscriptions_pkey;
-      EXCEPTION WHEN undefined_object THEN NULL;
-      END;
-      BEGIN
-        ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
-      EXCEPTION WHEN duplicate_object THEN NULL;
-      END;
-    END $$;`
+        SELECT COUNT(*) INTO pkcols FROM pg_constraint c
+          JOIN pg_class t ON t.oid = c.conrelid
+          WHERE t.relname = 'subscriptions' AND c.contype = 'p';
+        IF pkcols = 0 THEN
+          BEGIN
+            ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_pkey PRIMARY KEY (id);
+          EXCEPTION WHEN others THEN NULL; -- ignore if cannot add
+          END;
+        END IF;
+      END $$;`
     )
     .catch(() => {});
 
@@ -177,6 +190,42 @@ async function ensureSubscriptionsSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+}
+
+// Fallback creation for conversation tables if migrations (e.g. 013_conversation.sql) did not apply.
+async function ensureConversationSchema() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ConversationSessions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id BIGINT NOT NULL REFERENCES PracticeLessons(lesson_id) ON DELETE CASCADE,
+      mode TEXT NOT NULL DEFAULT 'scripted',
+      target_learner_turns INT NOT NULL DEFAULT 4,
+      status TEXT NOT NULL DEFAULT 'active',
+      final_score INT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ConversationTurns (
+      id BIGSERIAL PRIMARY KEY,
+      session_id BIGINT NOT NULL REFERENCES ConversationSessions(id) ON DELETE CASCADE,
+      turn_index INT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('ai','learner')),
+      text TEXT,
+      tts_path TEXT,
+      scores JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(session_id, turn_index)
+    );
+  `);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_conv_sessions_user ON ConversationSessions(user_id);`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_conv_turns_session ON ConversationTurns(session_id);`
+  );
 }
 
 // The database schema is now managed by the init scripts in the /database/init folder.
@@ -528,32 +577,39 @@ async function fetchUserLevelAndGoal(userId) {
 
 async function aiStartMessageViaOpenAI(title, level) {
   if (!OPENAI_API_KEY || !OPENAI_BASE_URL) return null;
-  const prompt = `Bạn là AI hỗ trợ luyện nói (AESP). Hãy tạo câu mở đầu duy nhất cho kịch bản hội thoại chủ đề "${title}" phù hợp trình độ ${level}. Chỉ trả về một câu duy nhất của AI.`;
+  const prompt = `Generate ONLY ONE short opening sentence to begin an English conversation about "${title}" suitable for CEFR level ${level}. Keep it friendly, natural, <= 20 words, no quotes.`;
   const body = {
     model: OPENAI_MODEL_CHAT,
     messages: [
-      { role: "system", content: "You are AESP conversation coach." },
+      {
+        role: "system",
+        content:
+          "You are AESP conversation coach. Always respond in English with level-appropriate, simple sentences.",
+      },
       { role: "user", content: prompt },
     ],
-    temperature: 0.7,
-    max_tokens: 120,
+    temperature: 0.6,
+    max_tokens: 60,
+    presence_penalty: 0.3,
+    frequency_penalty: 0.2,
   };
-  const resp = await fetch(
-    `${OPENAI_BASE_URL.replace(/\/$/, "")}/v1/chat/completions`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-    }
-  );
+  const chatUrl = getOpenAIChatCompletionsUrl();
+  const resp = await fetch(chatUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
   if (!resp.ok) {
     return null;
   }
   const data = await resp.json();
-  const text = data?.choices?.[0]?.message?.content?.trim();
+  let text = data?.choices?.[0]?.message?.content?.trim() || null;
+  if (text) {
+    text = text.replace(/^['"\s]+|['"\s]+$/g, "").replace(/\s+/g, " ");
+  }
   return text || null;
 }
 
@@ -625,11 +681,14 @@ function cosineSimilarity(a, b) {
 
 async function ttsForText(text, voiceCode) {
   try {
-    const resp = await fetch(`${PRONUNCIATION_INTERNAL.replace(/\/$/, "")}/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voice: voiceCode || undefined }),
-    });
+    const resp = await fetch(
+      `${PRONUNCIATION_INTERNAL.replace(/\/$/, "")}/tts`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: voiceCode || undefined }),
+      }
+    );
     if (!resp.ok) return null;
     const j = await resp.json();
     return j?.url || null; // already prefixed with /api/pronunciation
@@ -638,19 +697,39 @@ async function ttsForText(text, voiceCode) {
   }
 }
 
-async function aiNextMessage(history, title, level) {
-  // Try OpenAI with short history; fallback to ai-service generic prompt
+async function aiNextMessage({
+  history,
+  title,
+  level,
+  learnerText,
+  aiTurnCount,
+}) {
+  // Try OpenAI with short history; fallback to internal variety.
   if (OPENAI_API_KEY && OPENAI_BASE_URL) {
     const messages = [
-      { role: "system", content: `You are AESP conversation coach. Topic: ${title}. Keep messages short and A2-B1 friendly.` },
-      ...history.slice(-4),
-      { role: "user", content: "Reply with the next line of AI only." },
+      {
+        role: "system",
+        content: `You are AESP conversation coach. Topic: ${title}. Keep messages concise, encouraging, and appropriate for level ${level}. Avoid repeating previous sentences. Ask varied follow-up questions.`,
+      },
+      ...history.slice(-6),
+      { role: "user", content: learnerText || "Continue" },
     ];
     try {
-      const resp = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, "")}/v1/chat/completions`, {
+      const chatUrl = getOpenAIChatCompletionsUrl();
+      const resp = await fetch(chatUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-        body: JSON.stringify({ model: OPENAI_MODEL_CHAT, messages, temperature: 0.7, max_tokens: 120 }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL_CHAT,
+          messages,
+          temperature: 0.8,
+          max_tokens: 120,
+          presence_penalty: 0.6,
+          frequency_penalty: 0.4,
+        }),
       });
       if (resp.ok) {
         const data = await resp.json();
@@ -659,30 +738,57 @@ async function aiNextMessage(history, title, level) {
       }
     } catch (_) {}
   }
-  // Fallback: generic follow-up
-  return `Thanks for sharing. Could you tell me a bit more about ${title.toLowerCase()}?`;
+  // Fallback variants to avoid looping on one sentence.
+  const variants = [
+    `Interesting. What aspect of ${title.toLowerCase()} do you find most challenging?`,
+    `Got it. Can you give a concrete example related to ${title.toLowerCase()}?`,
+    `Thanks. How often do you deal with ${title.toLowerCase()} in daily life?`,
+    `I see. What would you like to improve most about ${title.toLowerCase()}?`,
+    `Great. Could you compare your experience with ${title.toLowerCase()} now versus last year?`,
+    `Nice answer. What advice would you give someone new to ${title.toLowerCase()}?`,
+  ];
+  const idx = aiTurnCount % variants.length;
+  return variants[idx];
 }
 
-async function aiSuggestLearnerReply(aiText, title, level) {
+async function aiSuggestLearnerReply(aiText, title, level, convHistory = []) {
   if (OPENAI_API_KEY && OPENAI_BASE_URL) {
-    const prompt = `Given the AI line: "${aiText}", suggest a concise learner reply (one sentence) suitable for level ${level} on topic ${title}. Return only the sentence.`;
+    const prompt = `Given the AI line: "${aiText}", suggest ONE concise learner reply suitable for CEFR level ${level} on topic ${title}. Keep it natural and different from any previous replies in the conversation. Return only the sentence without quotes.`;
     try {
-      const resp = await fetch(`${OPENAI_BASE_URL.replace(/\/$/, "")}/v1/chat/completions`, {
+      const chatUrl = getOpenAIChatCompletionsUrl();
+      const resp = await fetch(chatUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${OPENAI_API_KEY}` },
-        body: JSON.stringify({ model: OPENAI_MODEL_CHAT, messages: [
-          { role: "system", content: "You are AESP conversation coach." },
-          { role: "user", content: prompt }
-        ], temperature: 0.7, max_tokens: 80 }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL_CHAT,
+          messages: [
+            { role: "system", content: "You are AESP conversation coach." },
+            ...convHistory.slice(-4),
+            { role: "assistant", content: aiText },
+            { role: "user", content: prompt },
+          ],
+          temperature: 0.8,
+          max_tokens: 80,
+          presence_penalty: 0.5,
+          frequency_penalty: 0.3,
+        }),
       });
       if (resp.ok) {
         const data = await resp.json();
-        const text = data?.choices?.[0]?.message?.content?.trim();
-        if (text) return text;
+        let text = data?.choices?.[0]?.message?.content?.trim();
+        if (text) {
+          // Strip wrapping quotes and limit length as a safety.
+          text = text.replace(/^['"\s]+|['"\s]+$/g, "").slice(0, 180);
+          return text;
+        }
       }
     } catch (_) {}
   }
-  return `Here is my answer about ${title.toLowerCase()}.`;
+  // Final heuristic fallback when AI unavailable
+  return `I want to talk more about ${title.toLowerCase()}.`;
 }
 
 async function aiGenerateRoadmapTitles(category, level, count = 8) {
@@ -701,17 +807,15 @@ async function aiGenerateRoadmapTitles(category, level, count = 8) {
     max_tokens: 400,
   };
   try {
-    const resp = await fetch(
-      `${OPENAI_BASE_URL.replace(/\/$/, "")}/v1/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    const chatUrl = getOpenAIChatCompletionsUrl();
+    const resp = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
     if (!resp.ok) {
       return fallbackRoadmapTitles(category, level, count);
     }
@@ -1325,21 +1429,29 @@ app.post("/learning-path/complete", requireAuth, async (req, res) => {
 app.post("/learning-path/lessons/:id/start", requireAuth, async (req, res) => {
   try {
     const lessonId = Number(req.params.id);
-    if (!Number.isFinite(lessonId)) return res.status(400).json({ error: "Invalid lesson id" });
+    if (!Number.isFinite(lessonId))
+      return res.status(400).json({ error: "Invalid lesson id" });
     const { mode = "scripted", turns = 4 } = req.body || {};
-    if (!["scripted","ai-only"].includes(mode)) return res.status(400).json({ error: "Invalid mode" });
+    if (!["scripted", "ai-only"].includes(mode))
+      return res.status(400).json({ error: "Invalid mode" });
     const targetTurns = Math.max(1, Math.min(6, Number(turns) || 4));
 
     const { rows: lrows } = await pool.query(
       `SELECT title, difficulty_level, category FROM PracticeLessons WHERE lesson_id = $1`,
       [lessonId]
     );
-    if (!lrows.length) return res.status(404).json({ error: "Lesson not found" });
+    if (!lrows.length)
+      return res.status(404).json({ error: "Lesson not found" });
     const { title, difficulty_level, category } = lrows[0];
 
     // First AI message
     let aiText = await aiStartMessageViaOpenAI(title, difficulty_level);
-    if (!aiText) aiText = await aiStartMessageViaAiService(title, difficulty_level, category);
+    if (!aiText)
+      aiText = await aiStartMessageViaAiService(
+        title,
+        difficulty_level,
+        category
+      );
     if (!aiText) aiText = `Let's talk about ${title}. Could you start?`;
 
     const client = await pool.connect();
@@ -1355,10 +1467,20 @@ app.post("/learning-path/lessons/:id/start", requireAuth, async (req, res) => {
       // TTS for AI text; fetch preferred voice
       let voiceCode = null;
       try {
-        const pref = await client.query(`SELECT ai_voice FROM user_preferences WHERE user_id = $1`, [req.user.id]);
+        const pref = await client.query(
+          `SELECT ai_voice FROM user_preferences WHERE user_id = $1`,
+          [req.user.id]
+        );
         voiceCode = pref.rows[0]?.ai_voice || null;
-      } catch(_) {}
-      const ttsUrl = await ttsForText(aiText, voiceCode);
+      } catch (_) {}
+      let ttsUrl = await ttsForText(aiText, voiceCode);
+      if (!ttsUrl) {
+        // Retry with a safe fallback phrase to avoid silent start
+        const fallbackLine = `Let's begin our conversation about ${
+          title || "today's topic"
+        }.`;
+        ttsUrl = await ttsForText(fallbackLine, voiceCode);
+      }
 
       await client.query(
         `INSERT INTO ConversationTurns (session_id, turn_index, role, text, tts_path)
@@ -1368,142 +1490,256 @@ app.post("/learning-path/lessons/:id/start", requireAuth, async (req, res) => {
 
       // If scripted, suggest a learner reply for guidance
       let learnerHint = null;
-      if (mode === 'scripted') {
-        learnerHint = await aiSuggestLearnerReply(aiText, title, difficulty_level);
+      if (mode === "scripted") {
+        learnerHint = await aiSuggestLearnerReply(
+          aiText,
+          title,
+          difficulty_level
+        );
       }
 
       await client.query("COMMIT");
       return res.json({
-        session: { id: sessionId, mode, target_learner_turns: targetTurns, lesson_id: lessonId },
+        session: {
+          id: sessionId,
+          mode,
+          target_learner_turns: targetTurns,
+          lesson_id: lessonId,
+          lesson_title: title,
+        },
         ai: { text: aiText, tts_url: ttsUrl },
         learner_hint: learnerHint,
       });
     } catch (e) {
-      try { await client.query("ROLLBACK"); } catch(_) {}
+      try {
+        await client.query("ROLLBACK");
+      } catch (_) {}
       throw e;
-    } finally { client.release(); }
+    } finally {
+      client.release();
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
 // Submit a learner turn and get next AI line
-app.post("/learning-path/sessions/:sessionId/learner-turn", requireAuth, async (req, res) => {
-  try {
-    const sessionId = Number(req.params.sessionId);
-    if (!Number.isFinite(sessionId)) return res.status(400).json({ error: "Invalid session id" });
-    const { recognized_text, pa_scores } = req.body || {};
-    const text = String(recognized_text || "").trim();
-    if (!text) return res.status(400).json({ error: "recognized_text required" });
+app.post(
+  "/learning-path/sessions/:sessionId/learner-turn",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const sessionId = Number(req.params.sessionId);
+      if (!Number.isFinite(sessionId))
+        return res.status(400).json({ error: "Invalid session id" });
+      const { recognized_text, pa_scores } = req.body || {};
+      const text = String(recognized_text || "").trim();
+      if (!text)
+        return res.status(400).json({ error: "recognized_text required" });
 
-    // Load session, lesson and history
-    const { rows: srows } = await pool.query(
-      `SELECT cs.*, pl.title, pl.difficulty_level
+      // Load session, lesson and history
+      const { rows: srows } = await pool.query(
+        `SELECT cs.*, pl.title, pl.difficulty_level
        FROM ConversationSessions cs JOIN PracticeLessons pl ON pl.lesson_id = cs.lesson_id
        WHERE cs.id = $1 AND cs.user_id = $2`,
-      [sessionId, req.user.id]
-    );
-    if (!srows.length) return res.status(404).json({ error: "Session not found" });
-    const sess = srows[0];
-    if (sess.status !== 'active') return res.status(400).json({ error: "Session completed" });
+        [sessionId, req.user.id]
+      );
+      if (!srows.length)
+        return res.status(404).json({ error: "Session not found" });
+      const sess = srows[0];
+      if (sess.status !== "active")
+        return res.status(400).json({ error: "Session completed" });
 
-    const { rows: turns } = await pool.query(
-      `SELECT turn_index, role, text FROM ConversationTurns WHERE session_id = $1 ORDER BY turn_index ASC`,
-      [sessionId]
-    );
-    const nextIndex = (turns[turns.length - 1]?.turn_index || 0) + 1;
+      const { rows: turns } = await pool.query(
+        `SELECT turn_index, role, text FROM ConversationTurns WHERE session_id = $1 ORDER BY turn_index ASC`,
+        [sessionId]
+      );
+      const nextIndex = (turns[turns.length - 1]?.turn_index || 0) + 1;
 
-    // Compute semantic similarity vs previous AI line (if exists)
-    let similarity = 1;
-    const lastAi = [...turns].reverse().find(t => t.role === 'ai');
-    if (lastAi) {
-      similarity = cosineSimilarity(tokenize(text), tokenize(lastAi.text || ""));
-    }
+      // Compute semantic similarity vs previous AI line (if exists)
+      let similarity = 1;
+      const lastAi = [...turns].reverse().find((t) => t.role === "ai");
+      if (lastAi) {
+        similarity = cosineSimilarity(
+          tokenize(text),
+          tokenize(lastAi.text || "")
+        );
+      }
+      // Fairness: in scripted mode the learner may follow the provided hint; don't penalize relevance
+      if (sess.mode === "scripted") {
+        similarity = 1;
+      }
 
-  // Combine scores: pronScore primary (0-100), similarity (0-1)
-  const pron = Number(pa_scores?.pronScore ?? pa_scores?.pronunciationScore ?? 0) || 0;
-  const combined = Math.max(0, Math.min(100, Math.round(pron * (0.8 + 0.2 * similarity))));
+      // Combine scores: weighted composite of sub-scores with light relevance factor
+      const pron =
+        Number(pa_scores?.pronScore ?? pa_scores?.pronunciationScore ?? 0) || 0;
+      const acc = Number(pa_scores?.accuracyScore ?? 0) || 0;
+      const flu = Number(pa_scores?.fluencyScore ?? 0) || 0;
+      const comp = Number(pa_scores?.completenessScore ?? 0) || 0;
+      const pro = Number(pa_scores?.prosodyScore ?? 0) || 0;
+      // Base pronunciation quality (weights sum to 1.0)
+      const baseQuality =
+        0.35 * pron + 0.2 * acc + 0.2 * flu + 0.15 * comp + 0.1 * pro;
+      // Content/relevance multiplier (lighter penalty): 0.9 .. 1.0
+      const relevanceFactor = 0.9 + 0.1 * similarity;
+      const combined = Math.max(
+        0,
+        Math.min(100, Math.round(baseQuality * relevanceFactor))
+      );
 
-    // Store learner turn
-    await pool.query(
-      `INSERT INTO ConversationTurns (session_id, turn_index, role, text, scores)
-       VALUES ($1, $2, 'learner', $3, $4)`,
-      [sessionId, nextIndex, text, JSON.stringify({ ...pa_scores, similarity, combined })]
-    );
+      // Store learner turn
+      await pool.query(
+        `INSERT INTO ConversationTurns (session_id, turn_index, role, text, scores)
+         VALUES ($1, $2, 'learner', $3, $4)`,
+        [
+          sessionId,
+          nextIndex,
+          text,
+          JSON.stringify({
+            accuracyScore: pa_scores?.accuracyScore ?? null,
+            fluencyScore: pa_scores?.fluencyScore ?? null,
+            completenessScore: pa_scores?.completenessScore ?? null,
+            prosodyScore: pa_scores?.prosodyScore ?? null,
+            pronScore:
+              pa_scores?.pronScore ?? pa_scores?.pronunciationScore ?? null,
+            similarity,
+            relevanceFactor,
+            baseQuality: Math.round(baseQuality),
+            combined,
+          }),
+        ]
+      );
 
-    // Count learner turns so far
-    const learnerCount = turns.filter(t => t.role === 'learner').length + 1;
-    const target = Number(sess.target_learner_turns) || 4;
+      // Count learner turns so far
+      const learnerCount = turns.filter((t) => t.role === "learner").length + 1;
+      const target = Number(sess.target_learner_turns) || 4;
 
-    // Next AI line or complete
-    if (learnerCount >= target) {
-      return res.json({ done: true, combined });
-    }
+      // Next AI line or complete
+      if (learnerCount >= target) {
+        return res.json({ done: true, combined });
+      }
 
-    // Build short history for AI
-    const history = [];
-    for (const t of turns.slice(-3)) {
-      history.push({ role: t.role === 'ai' ? 'assistant' : 'user', content: t.text || '' });
-    }
-    history.push({ role: 'user', content: text });
-    const aiText = await aiNextMessage(history, sess.title, sess.difficulty_level);
-    const pref = await pool.query(`SELECT ai_voice FROM user_preferences WHERE user_id = $1`, [req.user.id]);
-    const ttsUrl = await ttsForText(aiText, pref.rows[0]?.ai_voice || null);
+      // Build short history for AI (assistant/user pairs)
+      const shortHistory = [];
+      for (const t of turns.slice(-6)) {
+        shortHistory.push({
+          role: t.role === "ai" ? "assistant" : "user",
+          content: t.text || "",
+        });
+      }
+      shortHistory.push({ role: "user", content: text });
+      const previousAiTurns = turns.filter((t) => t.role === "ai").length;
+      let aiText = await aiNextMessage({
+        history: shortHistory,
+        title: sess.title,
+        level: sess.difficulty_level,
+        learnerText: text,
+        aiTurnCount: previousAiTurns,
+      });
+      // Prevent immediate repetition: if identical to last AI, choose a different variant.
+      const lastAiPrev = [...turns].reverse().find((t) => t.role === "ai");
+      if (
+        lastAiPrev &&
+        lastAiPrev.text &&
+        lastAiPrev.text.trim() === aiText.trim()
+      ) {
+        aiText = await aiNextMessage({
+          history: shortHistory,
+          title: sess.title,
+          level: sess.difficulty_level,
+          learnerText: text + " (give me a different angle)",
+          aiTurnCount: previousAiTurns + 1,
+        });
+      }
+      const pref = await pool.query(
+        `SELECT ai_voice FROM user_preferences WHERE user_id = $1`,
+        [req.user.id]
+      );
+      let ttsUrl = await ttsForText(aiText, pref.rows[0]?.ai_voice || null);
+      if (!ttsUrl) {
+        // Retry with fallback phrase if synthesis failed
+        const fallbackLine =
+          aiText.length > 12
+            ? aiText
+            : `Let's continue about ${sess.title.toLowerCase()}.`;
+        ttsUrl = await ttsForText(fallbackLine, pref.rows[0]?.ai_voice || null);
+      }
 
-    await pool.query(
-      `INSERT INTO ConversationTurns (session_id, turn_index, role, text, tts_path)
+      await pool.query(
+        `INSERT INTO ConversationTurns (session_id, turn_index, role, text, tts_path)
        VALUES ($1, $2, 'ai', $3, $4)`,
-      [sessionId, nextIndex + 1, aiText, ttsUrl || null]
-    );
+        [sessionId, nextIndex + 1, aiText, ttsUrl || null]
+      );
 
-    let learnerHint = null;
-    if (sess.mode === 'scripted') {
-      learnerHint = await aiSuggestLearnerReply(aiText, sess.title, sess.difficulty_level);
+      let learnerHint = null;
+      if (sess.mode === "scripted") {
+        // Build minimal convo history for better suggestion diversity
+        const convoHistory = turns.slice(-6).map((t) => ({
+          role: t.role === "ai" ? "assistant" : "user",
+          content: t.text || "",
+        }));
+        learnerHint = await aiSuggestLearnerReply(
+          aiText,
+          sess.title,
+          sess.difficulty_level,
+          convoHistory
+        );
+      }
+
+      res.json({
+        ai: { text: aiText, tts_url: ttsUrl },
+        learner_hint: learnerHint,
+        combined,
+      });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
     }
-
-  res.json({ ai: { text: aiText, tts_url: ttsUrl }, learner_hint: learnerHint, combined });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
   }
-});
+);
 
 // Complete a session and update progress
-app.post("/learning-path/sessions/:sessionId/complete", requireAuth, async (req, res) => {
-  try {
-    const sessionId = Number(req.params.sessionId);
-    if (!Number.isFinite(sessionId)) return res.status(400).json({ error: "Invalid session id" });
-    const { rows: srows } = await pool.query(
-      `SELECT * FROM ConversationSessions WHERE id = $1 AND user_id = $2`,
-      [sessionId, req.user.id]
-    );
-    if (!srows.length) return res.status(404).json({ error: "Session not found" });
-    const sess = srows[0];
-    const { rows: lturns } = await pool.query(
-      `SELECT scores FROM ConversationTurns WHERE session_id = $1 AND role = 'learner' ORDER BY turn_index ASC`,
-      [sessionId]
-    );
-    let avg = 0;
-    if (lturns.length) {
-      const vals = lturns.map(r => Number(r.scores?.combined || 0) || 0);
-      avg = Math.round(vals.reduce((a,b)=>a+b,0) / vals.length);
-    }
-    await pool.query(
-      `UPDATE ConversationSessions SET status='completed', completed_at=NOW(), final_score=$1 WHERE id=$2`,
-      [avg, sessionId]
-    );
-    // Update LearnerProgress
-    await pool.query(
-      `INSERT INTO LearnerProgress (user_id, lesson_id, score)
+app.post(
+  "/learning-path/sessions/:sessionId/complete",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const sessionId = Number(req.params.sessionId);
+      if (!Number.isFinite(sessionId))
+        return res.status(400).json({ error: "Invalid session id" });
+      const { rows: srows } = await pool.query(
+        `SELECT * FROM ConversationSessions WHERE id = $1 AND user_id = $2`,
+        [sessionId, req.user.id]
+      );
+      if (!srows.length)
+        return res.status(404).json({ error: "Session not found" });
+      const sess = srows[0];
+      const { rows: lturns } = await pool.query(
+        `SELECT scores FROM ConversationTurns WHERE session_id = $1 AND role = 'learner' ORDER BY turn_index ASC`,
+        [sessionId]
+      );
+      let avg = 0;
+      if (lturns.length) {
+        const vals = lturns.map((r) => Number(r.scores?.combined || 0) || 0);
+        avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+      }
+      await pool.query(
+        `UPDATE ConversationSessions SET status='completed', completed_at=NOW(), final_score=$1 WHERE id=$2`,
+        [avg, sessionId]
+      );
+      // Update LearnerProgress
+      await pool.query(
+        `INSERT INTO LearnerProgress (user_id, lesson_id, score)
        SELECT user_id, lesson_id, $1 FROM ConversationSessions WHERE id=$2
        ON CONFLICT (user_id, lesson_id)
        DO UPDATE SET score = EXCLUDED.score, completed_at = CURRENT_TIMESTAMP`,
-      [avg, sessionId]
-    );
-    res.json({ ok: true, final_score: avg });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+        [avg, sessionId]
+      );
+      res.json({ ok: true, final_score: avg });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
   }
-});
+);
 
 // --- Admin: PracticeLessons management ---
 
@@ -1636,7 +1872,7 @@ app.get(
 );
 
 // Startup
-ensureSubscriptionsSchema()
+Promise.all([ensureSubscriptionsSchema(), ensureConversationSchema()])
   .catch((e) => {
     console.warn("Subscriptions schema ensure failed (continuing):", e.message);
   })
