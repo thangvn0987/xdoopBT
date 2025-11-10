@@ -13,6 +13,73 @@ const SERVICE_NAME = "pronunciation-assessment";
 
 // TTS Cache: Map from hash(text+voice) -> filename
 const ttsCache = new Map();
+// In-flight de-duplication: Map from cacheKey -> Promise
+const inflightTts = new Map();
+
+// Simple concurrency limiter (p-limit style) for outbound TTS calls
+function createLimit(concurrency) {
+  let activeCount = 0;
+  const queue = [];
+  const next = () => {
+    if (activeCount >= concurrency) return;
+    const item = queue.shift();
+    if (!item) return;
+    activeCount++;
+    (async () => {
+      try {
+        const result = await item.fn();
+        item.resolve(result);
+      } catch (e) {
+        item.reject(e);
+      } finally {
+        activeCount--;
+        next();
+      }
+    })();
+  };
+  return (fn) =>
+    new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      next();
+    });
+}
+const limitTts = createLimit(Number(process.env.TTS_CONCURRENCY || 4));
+
+// Fetch with timeout and retry/backoff for Azure HTTP API
+async function fetchWithRetry(url, init, opts = {}) {
+  const {
+    retries = 2,
+    timeoutMs = 15000,
+    retryOn = [429, 500, 502, 503, 504],
+    baseDelay = 400,
+  } = opts;
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const resp = await fetch(url, { ...(init || {}), signal: ac.signal });
+      clearTimeout(to);
+      if (!resp.ok && retryOn.includes(resp.status) && attempt <= retries + 1) {
+        const delay =
+          baseDelay * Math.pow(2, attempt - 1) + Math.random() * 150;
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      return resp;
+    } catch (e) {
+      clearTimeout(to);
+      if (attempt <= retries + 1) {
+        const delay =
+          baseDelay * Math.pow(2, attempt - 1) + Math.random() * 150;
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
 
 // CORS
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
@@ -64,7 +131,21 @@ function initTtsCache() {
 initTtsCache();
 
 // Serve generated / uploaded audio files (TTS output + user uploads transiently)
-app.use("/uploads", express.static(UPLOAD_DIR));
+// Add strong caching headers for content-addressed MP3s
+app.use(
+  "/uploads",
+  express.static(UPLOAD_DIR, {
+    etag: true,
+    lastModified: true,
+    maxAge: "365d",
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".mp3")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.setHeader("Content-Type", "audio/mpeg");
+      }
+    },
+  })
+);
 
 // Azure Speech config
 function makeSpeechConfig() {
@@ -243,50 +324,65 @@ app.post("/tts", async (req, res) => {
 
     console.log(`[TTS] Cache miss, generating audio via HTTP API...`);
 
-    // Use Azure Speech HTTP API directly (more reliable than SDK)
-    const speechKey = process.env.SPEECH_KEY;
-    const speechRegion = process.env.SPEECH_REGION;
-    if (!speechKey || !speechRegion) {
-      throw new Error("Missing SPEECH_KEY or SPEECH_REGION env var");
+    // In-flight dedupe to avoid duplicate synth for same key
+    if (inflightTts.has(cacheKey)) {
+      console.log(`[TTS] Awaiting in-flight synthesis for ${cacheKey}`);
+      await inflightTts.get(cacheKey);
+    } else {
+      const speechKey = process.env.SPEECH_KEY;
+      const speechRegion = process.env.SPEECH_REGION;
+      if (!speechKey || !speechRegion) {
+        throw new Error("Missing SPEECH_KEY or SPEECH_REGION env var");
+      }
+      const safeText = text
+        .trim()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voiceName}'>${safeText}</voice></speak>`;
+      console.log(`[TTS] SSML: ${ssml}`);
+      const azureUrl = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
+      const p = limitTts(async () => {
+        const azureResponse = await fetchWithRetry(
+          azureUrl,
+          {
+            method: "POST",
+            headers: {
+              "Ocp-Apim-Subscription-Key": speechKey,
+              "Content-Type": "application/ssml+xml",
+              "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
+              "User-Agent": "aesp-tts-service",
+            },
+            body: ssml,
+          },
+          { timeoutMs: 20000, retries: 2 }
+        );
+        console.log(`[TTS] Azure response status: ${azureResponse.status}`);
+        if (!azureResponse.ok) {
+          const errorText = await azureResponse.text();
+          console.error(`[TTS] Azure API error: ${errorText}`);
+          throw new Error(
+            `Azure TTS failed: ${azureResponse.status} ${errorText}`
+          );
+        }
+        const audioData = await azureResponse.arrayBuffer();
+        console.log(`[TTS] Audio data size: ${audioData.byteLength} bytes`);
+        if (!audioData || audioData.byteLength === 0) {
+          throw new Error("Empty audio data");
+        }
+        fs.writeFileSync(cachedFilePath, Buffer.from(audioData));
+        ttsCache.set(cacheKey, cachedFileName);
+        console.log(
+          `[TTS] Audio saved to ${cachedFileName}, size: ${audioData.byteLength} bytes`
+        );
+      });
+      inflightTts.set(cacheKey, p);
+      try {
+        await p;
+      } finally {
+        inflightTts.delete(cacheKey);
+      }
     }
-
-    const ssml = `<speak version='1.0' xml:lang='en-US'><voice name='${voiceName}'>${text.trim()}</voice></speak>`;
-    console.log(`[TTS] SSML: ${ssml}`);
-
-    const azureUrl = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
-    const azureResponse = await fetch(azureUrl, {
-      method: "POST",
-      headers: {
-        "Ocp-Apim-Subscription-Key": speechKey,
-        "Content-Type": "application/ssml+xml",
-        "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
-        "User-Agent": "aesp-tts-service",
-      },
-      body: ssml,
-    });
-
-    console.log(`[TTS] Azure response status: ${azureResponse.status}`);
-
-    if (!azureResponse.ok) {
-      const errorText = await azureResponse.text();
-      console.error(`[TTS] Azure API error: ${errorText}`);
-      throw new Error(`Azure TTS failed: ${azureResponse.status} ${errorText}`);
-    }
-
-    const audioData = await azureResponse.arrayBuffer();
-    console.log(`[TTS] Audio data size: ${audioData.byteLength} bytes`);
-
-    if (!audioData || audioData.byteLength === 0) {
-      console.error(`[TTS] Empty audio data from Azure`);
-      return res.status(500).json({ error: "Empty audio data" });
-    }
-
-    // Save to cache file
-    fs.writeFileSync(cachedFilePath, Buffer.from(audioData));
-    ttsCache.set(cacheKey, cachedFileName);
-    console.log(
-      `[TTS] Audio saved to ${cachedFileName}, size: ${audioData.byteLength} bytes`
-    );
 
     res.json({
       ok: true,
@@ -302,4 +398,18 @@ app.post("/tts", async (req, res) => {
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`${SERVICE_NAME} listening on ${PORT}`);
+});
+
+// Error handler last
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error(`[${SERVICE_NAME}]`, err);
+  res.status(500).json({ error: err.message || "Internal Server Error" });
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error(`[${SERVICE_NAME}] unhandledRejection`, reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error(`[${SERVICE_NAME}] uncaughtException`, err);
 });

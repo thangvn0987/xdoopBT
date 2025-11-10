@@ -33,6 +33,67 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
+// --- Async utils: fetch with timeout & retry/backoff ---
+async function fetchWithRetry(url, init, opts = {}) {
+  const {
+    retries = 2,
+    timeoutMs = 12000,
+    retryOn = [408, 429, 500, 502, 503, 504],
+    baseDelay = 300,
+  } = opts;
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const resp = await fetch(url, { ...(init || {}), signal: ac.signal });
+      clearTimeout(to);
+      if (!resp.ok && retryOn.includes(resp.status) && attempt <= retries + 1) {
+        const delay =
+          baseDelay * Math.pow(2, attempt - 1) + Math.random() * 120;
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      return resp;
+    } catch (e) {
+      clearTimeout(to);
+      if (attempt <= retries + 1) {
+        const delay =
+          baseDelay * Math.pow(2, attempt - 1) + Math.random() * 120;
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+// --- Concurrency limiter for outbound AI calls (simple p-limit) ---
+function createLimit(concurrency) {
+  let active = 0;
+  const queue = [];
+  const run = () => {
+    if (active >= concurrency) return;
+    const item = queue.shift();
+    if (!item) return;
+    active++;
+    Promise.resolve()
+      .then(item.fn)
+      .then(item.resolve, item.reject)
+      .finally(() => {
+        active--;
+        run();
+      });
+  };
+  return (fn) =>
+    new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      run();
+    });
+}
+const limitOpenAI = createLimit(Number(process.env.OPENAI_CONCURRENCY || 5));
+
 // Helper: build OpenAI-compatible API root, tolerant if base already ends with /v1
 function getOpenAIChatCompletionsUrl() {
   if (!OPENAI_BASE_URL) return null;
@@ -594,14 +655,20 @@ async function aiStartMessageViaOpenAI(title, level) {
     frequency_penalty: 0.2,
   };
   const chatUrl = getOpenAIChatCompletionsUrl();
-  const resp = await fetch(chatUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const resp = await limitOpenAI(() =>
+    fetchWithRetry(
+      chatUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify(body),
+      },
+      { timeoutMs: 12000, retries: 1 }
+    )
+  );
   if (!resp.ok) {
     return null;
   }
@@ -622,13 +689,14 @@ async function aiStartMessageViaAiService(title, level, category) {
       length: "short",
       level: level || "B1",
     };
-    const resp = await fetch(
+    const resp = await fetchWithRetry(
       `${AI_INTERNAL_BASE.replace(/\/$/, "")}/generate-script`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      }
+      },
+      { timeoutMs: 8000, retries: 1 }
     );
     if (!resp.ok) return null;
     const data = await resp.json();
@@ -681,13 +749,14 @@ function cosineSimilarity(a, b) {
 
 async function ttsForText(text, voiceCode) {
   try {
-    const resp = await fetch(
+    const resp = await fetchWithRetry(
       `${PRONUNCIATION_INTERNAL.replace(/\/$/, "")}/tts`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, voice: voiceCode || undefined }),
-      }
+      },
+      { timeoutMs: 12000, retries: 1 }
     );
     if (!resp.ok) return null;
     const j = await resp.json();
@@ -716,21 +785,27 @@ async function aiNextMessage({
     ];
     try {
       const chatUrl = getOpenAIChatCompletionsUrl();
-      const resp = await fetch(chatUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: OPENAI_MODEL_CHAT,
-          messages,
-          temperature: 0.8,
-          max_tokens: 120,
-          presence_penalty: 0.6,
-          frequency_penalty: 0.4,
-        }),
-      });
+      const resp = await limitOpenAI(() =>
+        fetchWithRetry(
+          chatUrl,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: OPENAI_MODEL_CHAT,
+              messages,
+              temperature: 0.8,
+              max_tokens: 120,
+              presence_penalty: 0.6,
+              frequency_penalty: 0.4,
+            }),
+          },
+          { timeoutMs: 12000, retries: 1 }
+        )
+      );
       if (resp.ok) {
         const data = await resp.json();
         const text = data?.choices?.[0]?.message?.content?.trim();
@@ -756,26 +831,32 @@ async function aiSuggestLearnerReply(aiText, title, level, convHistory = []) {
     const prompt = `Given the AI line: "${aiText}", suggest ONE concise learner reply suitable for CEFR level ${level} on topic ${title}. Keep it natural and different from any previous replies in the conversation. Return only the sentence without quotes.`;
     try {
       const chatUrl = getOpenAIChatCompletionsUrl();
-      const resp = await fetch(chatUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: OPENAI_MODEL_CHAT,
-          messages: [
-            { role: "system", content: "You are AESP conversation coach." },
-            ...convHistory.slice(-4),
-            { role: "assistant", content: aiText },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.8,
-          max_tokens: 80,
-          presence_penalty: 0.5,
-          frequency_penalty: 0.3,
-        }),
-      });
+      const resp = await limitOpenAI(() =>
+        fetchWithRetry(
+          chatUrl,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: OPENAI_MODEL_CHAT,
+              messages: [
+                { role: "system", content: "You are AESP conversation coach." },
+                ...convHistory.slice(-4),
+                { role: "assistant", content: aiText },
+                { role: "user", content: prompt },
+              ],
+              temperature: 0.8,
+              max_tokens: 80,
+              presence_penalty: 0.5,
+              frequency_penalty: 0.3,
+            }),
+          },
+          { timeoutMs: 12000, retries: 1 }
+        )
+      );
       if (resp.ok) {
         const data = await resp.json();
         let text = data?.choices?.[0]?.message?.content?.trim();
@@ -808,13 +889,36 @@ async function aiGenerateRoadmapTitles(category, level, count = 8) {
   };
   try {
     const chatUrl = getOpenAIChatCompletionsUrl();
-    const resp = await fetch(chatUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
+    const resp = await limitOpenAI(() =>
+      fetchWithRetry(
+        chatUrl,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify(body),
+        },
+        { timeoutMs: 15000, retries: 1 }
+      )
+    );
+
+    // --- Global error handler (Express) ---
+    app.use((err, req, res, next) => {
+      if (res.headersSent) return next(err);
+      const status = err.status || 500;
+      res
+        .status(status)
+        .json({ error: err.message || "Internal Server Error" });
+    });
+
+    // Process-level guards to avoid silent crashes
+    process.on("unhandledRejection", (reason) => {
+      console.error("[unhandledRejection]", reason);
+    });
+    process.on("uncaughtException", (err) => {
+      console.error("[uncaughtException]", err);
     });
     if (!resp.ok) {
       return fallbackRoadmapTitles(category, level, count);
