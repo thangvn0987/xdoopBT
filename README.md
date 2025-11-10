@@ -34,15 +34,15 @@ Kho mã này là một ứng dụng Node.js đa dịch vụ minh họa:
 
 ```mermaid
 graph TD
-  U[Người dùng] --> FE[Frontend (React/Vite)]
-  FE --> GW[Gateway (Express)]
+  U[Người dùng] --> FE[Frontend · React/Vite]
+  FE --> GW[Gateway · Express]
 
   GW -->|/api/auth/...| AUTH[auth-service]
   GW -->|/api/learners/...| LEARN[learner-service]
   GW -->|/api/pronunciation/...| PRON[pronunciation-assessment]
 
-  LEARN -.->|fallback| AI[ai-service (scripts)]
-  LEARN -.->|tương lai| MENT[mentor-service?]
+  LEARN -.->|fallback| AI[ai-service scripts]
+  LEARN -.->|tương lai| MENT[mentor-service]
 
   AUTH --> DB[(Postgres)]
   LEARN --> DB
