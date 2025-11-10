@@ -6,8 +6,11 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
+// Behind a proxy/load balancer (X-Forwarded-For)
+app.set("trust proxy", 1);
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:3000",
@@ -44,6 +47,29 @@ async function ensureSchema() {
   `;
   await pool.query(sql);
 }
+
+// Rate limiting
+// 1) Strict auth limiter: 10 req/IP/hour for sensitive auth routes
+const authLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
+  message: { error: "Too many requests for auth endpoints. Try again later." },
+});
+// Apply to sensitive routes first
+app.use(["/google", "/callback", "/logout", "/me"], authLimiter);
+
+// 2) General limiter: 200 req/IP/15min for all other routes
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
+});
+app.use(generalLimiter);
 
 app.get("/", (req, res) => {
   res.json({ service: SERVICE_NAME, message: "Welcome to AESP Auth Service" });
