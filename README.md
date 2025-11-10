@@ -32,32 +32,27 @@ Kho mã này là một ứng dụng Node.js đa dịch vụ minh họa:
 
 ## Kiến trúc tổng quan
 
-```
-┌───────────────────┐   ┌──────────────────────────┐
-│   Frontend (React)│←→│        Gateway (Express) │←────┐
-└───────────────────┘   └──────────────────────────┘     │
-		  ↑  │  API: /api/...                              │
-		  │  ├──────────┬──────────────────────────┐       │
-		  │             │                          │       │
-		  │      ┌─────────────┐   ┌────────────────────┐ │
-		  │      │auth-service │   │ learner-service     │ │
-		  │      └─────────────┘   └────────────────────┘ │
-		  │             │                  │               │
-		  │             │                  │ AI fallback   │
-		  │             │                  ▼               │
-		  │      ┌────────────────┐   ┌──────────────────────┐
-		  │      │mentor-service? │   │ ai-service (scripts) │
-		  │      └────────────────┘   └──────────────────────┘
-		  │                                      │            │
-		  │                                      ▼            │
-		  │                         ┌────────────────────────┐│
-		  │                         │pronunciation-assessment││
-		  │                         └────────────────────────┘│
-		  │                                      │ Azure / OpenAI
-		  │                                      ▼
-		  │                                Dịch vụ bên ngoài
-		  ▼
-	Postgres (DB dùng chung)
+```mermaid
+graph TD
+  U[Người dùng] --> FE[Frontend (React/Vite)]
+  FE --> GW[Gateway (Express)]
+
+  GW -->|/api/auth/...| AUTH[auth-service]
+  GW -->|/api/learners/...| LEARN[learner-service]
+  GW -->|/api/pronunciation/...| PRON[pronunciation-assessment]
+
+  LEARN -.->|fallback| AI[ai-service (scripts)]
+  LEARN -.->|tương lai| MENT[mentor-service?]
+
+  AUTH --> DB[(Postgres)]
+  LEARN --> DB
+  PRON --> DB
+
+  PRON -->|TTS + Assessment| AZURE[Azure Speech Services]
+  LEARN -->|Chat Completions| OPENAI[OpenAI-compatible API]
+
+  classDef ext fill:#eef,stroke:#99f,stroke-width:1px;
+  class AZURE,OPENAI ext;
 ```
 
 ## Các dịch vụ
