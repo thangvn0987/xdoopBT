@@ -11,6 +11,7 @@ import AppShell from "./components/AppShell";
 import OnboardingGate from "./auth/OnboardingGate";
 import RoadmapPage from "./learning-path/RoadmapPage";
 import SubscriptionPage from "./plans/SubscriptionPage";
+import ChatLessonPage from "./learning-path/ChatLessonPage";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
       >
         <Route path="/" element={<HomePage />} />
         <Route path="/roadmap" element={<RoadmapPage />} />
+        <Route path="/lesson/:lessonId/chat" element={<ChatLessonPage />} />
         <Route path="/plans" element={<SubscriptionPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/level-test" element={<LevelTest />} />
