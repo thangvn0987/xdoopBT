@@ -9,6 +9,7 @@ Mục tiêu tài liệu: Tóm tắt từ tổng quan đến chi tiết để b�
 ## 1) Tổng Quan Hệ Thống
 
 AIESP là nền tảng luyện nói tiếng Anh, kết hợp:
+
 - Ứng dụng web (React + Tailwind + Vite) cho học viên.
 - Kiến trúc microservices (Node.js/Express) và Postgres làm CSDL.
 - Dịch vụ AI (ASR + LLM scoring) cho chấm điểm phát âm và hội thoại.
@@ -170,10 +171,11 @@ docker compose up -d --build learner-service frontend gateway
 
 - Kỳ hạn cố định 30 ngày. Nâng cấp pro‑rata: thu phần chênh lệch tính theo ngày còn lại. Nâng cấp sẽ gỡ trạng thái “hủy cuối kỳ” nếu có.
 - Các bước thử trong UI (`/plans`):
-  1) Chọn plan `Self-Study (AI-Only)` (200k VND) → `subscriptions/choose`.
-  2) Đặt hủy cuối kỳ → `subscriptions/cancel`.
-  3) Nâng cấp `Mentor-Included` (800k VND) → xem modal báo giá → Xác nhận → `subscriptions/upgrade`.
-  4) Kiểm tra trạng thái đã gỡ `cancel_at_period_end` và plan hiện là `mentor_plus`.
+
+  1. Chọn plan `Self-Study (AI-Only)` (200k VND) → `subscriptions/choose`.
+  2. Đặt hủy cuối kỳ → `subscriptions/cancel`.
+  3. Nâng cấp `Mentor-Included` (800k VND) → xem modal báo giá → Xác nhận → `subscriptions/upgrade`.
+  4. Kiểm tra trạng thái đã gỡ `cancel_at_period_end` và plan hiện là `mentor_plus`.
 
 - Tương đương qua API (đã đăng nhập; thay token):
 
