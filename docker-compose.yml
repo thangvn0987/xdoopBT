@@ -120,7 +120,7 @@ services:
       - aesp_net
 
   pronunciation-assessment:
-    build: ./pronunciation-assessment
+    build: ./services/pronunciation-assessment
     container_name: aesp_pronunciation
     restart: unless-stopped
     environment:
@@ -131,7 +131,7 @@ services:
       SPEECH_ENDPOINT: ${SPEECH_ENDPOINT}
       ALLOWED_ORIGINS: ${CORS_ORIGIN}
     volumes:
-      - ./pronunciation-assessment/uploads:/app/uploads
+      - ./services/pronunciation-assessment/uploads:/app/uploads
     depends_on:
       - postgres
     # Internal-only; reachable at http://pronunciation-assessment:8085
