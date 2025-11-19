@@ -17,6 +17,7 @@ const gatewayLimiter = rateLimit({
   max: parseInt(process.env.RATE_LIMIT_MAX) || 1000,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
   message: {
     status: 429,
     message:
