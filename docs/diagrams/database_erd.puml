@@ -1,0 +1,75 @@
+@startuml database_erd
+' ERD for xdoopBT (subscriptions demo)
+
+entity "learners" as learners {
+  * id : uuid <<PK>>
+  --
+  email : varchar
+  name : varchar
+  status : varchar
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "plans" as plans {
+  * id : uuid <<PK>>
+  --
+  plan_key : varchar
+  name : varchar
+  price_cents : integer
+  cycle_days : integer
+  description : text
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "subscriptions" as subscriptions {
+  * id : uuid <<PK>>
+  --
+  learner_id : uuid <<FK>>
+  plan_id : uuid <<FK>>
+  started_at : timestamptz
+  current_period_start : timestamptz
+  current_period_end : timestamptz
+  cancelled_at_period_end : boolean
+  status : varchar
+  proration_balance_cents : integer
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity "payment_transactions" as payments {
+  * id : uuid <<PK>>
+  --
+  subscription_id : uuid <<FK>>
+  amount_cents : integer
+  currency : varchar
+  status : varchar
+  provider_txn_id : varchar
+  created_at : timestamptz
+  processed_at : timestamptz
+}
+
+entity "features" as features {
+  * id : uuid <<PK>>
+  --
+  code : varchar
+  name : varchar
+  description : text
+}
+
+entity "plan_features" as plan_features {
+  * id : uuid <<PK>>
+  --
+  plan_id : uuid <<FK>>
+  feature_id : uuid <<FK>>
+}
+
+' relationships
+learners ||--o{ subscriptions : "has"
+plans ||--o{ subscriptions : "defines"
+subscriptions ||--o{ payments : "billed by"
+plans }o--|| plan_features : "has"
+features ||--o{ plan_features : "belongs to"
+
+@enduml
