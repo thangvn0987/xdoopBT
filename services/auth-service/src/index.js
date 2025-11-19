@@ -1,4 +1,5 @@
 require("dotenv").config();
+const rateLimit = require("express-rate-limit");
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
@@ -6,8 +7,29 @@ const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const jwt = require("jsonwebtoken");
 const { Pool } = require("pg");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
+
+//ratelimit
+app.set("trust proxy", 1);
+app.use(buildCors());
+const gatewayLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX) || 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 429,
+    message:
+      "Too many requests from this IP to the Gateway, please try again later.",
+  },
+});
+app.use(gatewayLimiter);
+//
+
+// Behind a proxy/load balancer (X-Forwarded-For)
+app.set("trust proxy", 1);
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "http://localhost:3000",
@@ -44,6 +66,30 @@ async function ensureSchema() {
   `;
   await pool.query(sql);
 }
+
+// Rate limiting
+// 1) Strict auth limiter: 10 req/IP/hour for sensitive auth routes
+const authLimiter = rateLimit({
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 60 * 60 * 1000,
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX) || 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
+  message: { error: "Too many requests for auth endpoints. Try again later." },
+});
+// Apply to sensitive routes first
+app.use(["/google", "/callback", "/logout", "/me"], authLimiter);
+
+// 2) General limiter: 200 req/IP/15min for all other routes
+const generalLimiter = rateLimit({
+  windowMs:
+    parseInt(process.env.GENERAL_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.GENERAL_RATE_LIMIT_MAX) || 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.method === "OPTIONS",
+});
+app.use(generalLimiter);
 
 app.get("/", (req, res) => {
   res.json({ service: SERVICE_NAME, message: "Welcome to AESP Auth Service" });

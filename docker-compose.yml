@@ -58,6 +58,11 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
       SESSION_SECRET: ${SESSION_SECRET}
+      #
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX}
+      AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS}
+      GENERAL_RATE_LIMIT_MAX: ${GENERAL_RATE_LIMIT_MAX}
+      GENERAL_RATE_LIMIT_WINDOW_MS: ${GENERAL_RATE_LIMIT_WINDOW_MS}
     depends_on:
       - postgres
       - db-migrator
@@ -83,21 +88,6 @@ services:
     networks:
       - aesp_net
 
-  mentor-service:
-    build: ./services/mentor-service
-    container_name: aesp_mentor
-    restart: unless-stopped
-    environment:
-      NODE_ENV: ${NODE_ENV}
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-    depends_on:
-      - postgres
-      - db-migrator
-    # No public port; reachable at http://mentor-service:3000
-    networks:
-      - aesp_net
-
   ai-service:
     build: ./services/ai-service
     container_name: aesp_ai
@@ -120,7 +110,7 @@ services:
       - aesp_net
 
   pronunciation-assessment:
-    build: ./pronunciation-assessment
+    build: ./services/pronunciation-assessment
     container_name: aesp_pronunciation
     restart: unless-stopped
     environment:
@@ -131,7 +121,7 @@ services:
       SPEECH_ENDPOINT: ${SPEECH_ENDPOINT}
       ALLOWED_ORIGINS: ${CORS_ORIGIN}
     volumes:
-      - ./pronunciation-assessment/uploads:/app/uploads
+      - ./services/pronunciation-assessment/uploads:/app/uploads
     depends_on:
       - postgres
     # Internal-only; reachable at http://pronunciation-assessment:8085
@@ -149,7 +139,7 @@ services:
     depends_on:
       - auth-service
       - learner-service
-      - mentor-service
+
       - ai-service
     networks:
       - aesp_net
@@ -161,11 +151,13 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV}
       GATEWAY_PORT: ${GATEWAY_PORT}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
     depends_on:
       - frontend
       - auth-service
       - learner-service
-      - mentor-service
+
       - ai-service
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
