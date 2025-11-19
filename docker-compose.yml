@@ -58,6 +58,11 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL}
       SESSION_SECRET: ${SESSION_SECRET}
+      #
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX}
+      AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS}
+      GENERAL_RATE_LIMIT_MAX: ${GENERAL_RATE_LIMIT_MAX}
+      GENERAL_RATE_LIMIT_WINDOW_MS: ${GENERAL_RATE_LIMIT_WINDOW_MS}
     depends_on:
       - postgres
       - db-migrator
@@ -161,6 +166,8 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV}
       GATEWAY_PORT: ${GATEWAY_PORT}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX}
     depends_on:
       - frontend
       - auth-service
