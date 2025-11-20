@@ -1,0 +1,69 @@
+@startuml class_diagram
+
+' Classes for application logic mapping to DB
+class Learner {
+  - id: UUID
+  - email: String
+  - name: String
+  - status: String
+  - createdAt: DateTime
+  - updatedAt: DateTime
+  + subscribe(planId: UUID): Subscription
+  + cancelAtPeriodEnd(): void
+  + upgradeTo(planId: UUID): Subscription
+  + getActiveSubscription(): Subscription
+}
+
+class Plan {
+  - id: UUID
+  - planKey: String
+  - name: String
+  - priceCents: Integer
+  - cycleDays: Integer
+  - description: String
+  + calculateProratedCharge(currentSubscription: Subscription): Integer
+  + isActive(): Boolean
+}
+
+class Subscription {
+  - id: UUID
+  - learnerId: UUID
+  - planId: UUID
+  - startedAt: DateTime
+  - currentPeriodStart: DateTime
+  - currentPeriodEnd: DateTime
+  - cancelledAtPeriodEnd: Boolean
+  - status: String
+  - prorationBalanceCents: Integer
+  + scheduleCancel(): void
+  + upgrade(plan: Plan): Transaction
+  + chargeNextCycle(): Transaction
+  + prorateForUpgrade(newPlan: Plan): Integer
+}
+
+class PaymentTransaction {
+  - id: UUID
+  - subscriptionId: UUID
+  - amountCents: Integer
+  - currency: String
+  - status: String
+  - providerTxnId: String
+  - createdAt: DateTime
+  + process(): Boolean
+  + refund(): Boolean
+}
+
+class Feature {
+  - id: UUID
+  - code: String
+  - name: String
+  - description: String
+}
+
+Learner "1" --> "0..1" Subscription : active
+Plan "1" --> "*" Subscription
+Subscription "1" --> "*" PaymentTransaction
+Plan "1" --> "*" Feature : provides
+Feature <-- "*" Plan
+
+@enduml
